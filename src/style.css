@@ -1,0 +1,405 @@
+:root {
+  --hud-fg: #f2f5f7;
+  --hud-dim: #9aa6b2;
+  --hud-accent: #ffcf5c;
+  --hud-bg: rgba(10, 14, 18, 0.55);
+  --crosshair-gap: 6px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0e12;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  color: var(--hud-fg);
+}
+
+canvas {
+  display: block;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------- HUD ---------- */
+
+.hud {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  /* Above the scope mask so ammo and stats stay readable while scoped. */
+  z-index: 30;
+}
+
+.hud--visible {
+  opacity: 1;
+}
+
+.hud__panel {
+  position: absolute;
+  padding: 10px 14px;
+  background: var(--hud-bg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(3px);
+}
+
+.hud__panel--weapon {
+  right: 26px;
+  bottom: 24px;
+  min-width: 190px;
+  text-align: right;
+}
+
+.hud__panel--stats {
+  left: 26px;
+  bottom: 24px;
+  min-width: 170px;
+}
+
+.hud__label {
+  color: var(--hud-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.hud__weapon-name {
+  font-size: 17px;
+  letter-spacing: 0.12em;
+  color: var(--hud-accent);
+}
+
+.hud__ammo {
+  font-size: 30px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__ammo--low {
+  color: #ff7a5c;
+}
+
+.hud__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__fps {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  font-size: 11px;
+  color: var(--hud-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__range {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 34px);
+  font-size: 12px;
+  color: var(--hud-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 62px);
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  color: var(--hud-accent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.hud__hint--visible {
+  opacity: 1;
+}
+
+/* ---------- Crosshair ---------- */
+
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transition: opacity 0.12s ease;
+}
+
+.crosshair__bar {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+.crosshair__bar--up,
+.crosshair__bar--down {
+  width: 2px;
+  height: 8px;
+  left: -1px;
+}
+
+.crosshair__bar--up {
+  bottom: var(--crosshair-gap);
+}
+
+.crosshair__bar--down {
+  top: var(--crosshair-gap);
+}
+
+.crosshair__bar--left,
+.crosshair__bar--right {
+  width: 8px;
+  height: 2px;
+  top: -1px;
+}
+
+.crosshair__bar--left {
+  right: var(--crosshair-gap);
+}
+
+.crosshair__bar--right {
+  left: var(--crosshair-gap);
+}
+
+.crosshair__dot {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  left: -1px;
+  top: -1px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.hitmarker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  opacity: 0;
+}
+
+.hitmarker::before,
+.hitmarker::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #ffe9a8;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+.hitmarker::before {
+  transform: rotate(45deg);
+}
+
+.hitmarker::after {
+  transform: rotate(-45deg);
+}
+
+.hitmarker--hit {
+  animation: hitmarker-pop 0.24s ease-out;
+}
+
+.hitmarker--bullseye::before,
+.hitmarker--bullseye::after {
+  background: #7dfc9b;
+}
+
+@keyframes hitmarker-pop {
+  0% {
+    opacity: 1;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+/* ---------- Scope ---------- */
+
+.scope {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.08s linear;
+  pointer-events: none;
+}
+
+.scope--visible {
+  opacity: 1;
+}
+
+.scope__mask {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) calc(min(46vh, 46vw) - 2px),
+    rgba(0, 0, 0, 0.92) calc(min(46vh, 46vw) + 1px),
+    #000 calc(min(46vh, 46vw) + 26px)
+  );
+}
+
+.scope__glare {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(92vh, 92vw);
+  height: min(92vh, 92vw);
+  margin: calc(min(46vh, 46vw) * -1) 0 0 calc(min(46vh, 46vw) * -1);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 38% 28%,
+    rgba(150, 200, 255, 0.09) 0%,
+    rgba(0, 0, 0, 0) 55%
+  );
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.75);
+}
+
+.scope__reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(92vh, 92vw);
+  height: min(92vh, 92vw);
+}
+
+.scope__line {
+  position: absolute;
+  background: rgba(12, 14, 16, 0.9);
+}
+
+.scope__line--h {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  margin-top: -0.75px;
+}
+
+.scope__line--v {
+  left: 50%;
+  top: 0;
+  width: 1.5px;
+  height: 100%;
+  margin-left: -0.75px;
+}
+
+.scope__mil {
+  position: absolute;
+  left: 50%;
+  width: 14px;
+  height: 1.5px;
+  margin-left: -7px;
+  background: rgba(12, 14, 16, 0.85);
+}
+
+.scope__center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: rgba(12, 14, 16, 0.95);
+}
+
+/* ---------- Start screen ---------- */
+
+.start {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: radial-gradient(circle at 50% 40%, rgba(18, 24, 32, 0.82), rgba(6, 8, 11, 0.96));
+  cursor: pointer;
+  text-align: center;
+  padding: 24px;
+}
+
+.start--hidden {
+  display: none;
+}
+
+.start__title {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 54px);
+  letter-spacing: 0.22em;
+  font-weight: 600;
+}
+
+.start__cta {
+  font-size: 15px;
+  letter-spacing: 0.3em;
+  color: var(--hud-accent);
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.start__controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 8px 22px;
+  font-size: 13px;
+  color: var(--hud-dim);
+  text-align: left;
+}
+
+.start__key {
+  color: var(--hud-fg);
+  letter-spacing: 0.08em;
+}
+
+.start__note {
+  font-size: 11px;
+  color: #6c7885;
+  max-width: 460px;
+  line-height: 1.6;
+}
