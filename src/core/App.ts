@@ -44,7 +44,12 @@ export class App {
     this.input.onLockChange = (locked) => this.handleLockChange(locked);
 
     // Thumb sticks only exist on touchscreens; a desktop never sees them.
-    this.touch = TouchControls.isTouchDevice() ? new TouchControls(container) : null;
+    this.touch = TouchControls.isTouchDevice()
+      ? new TouchControls(container, {
+          onSwapWeapon: () => this.mode?.swapWeapon(),
+          onExit: () => this.exitToMenu(),
+        })
+      : null;
     this.input.attachTouch(this.touch?.state ?? null);
 
     this.loop = new GameLoop((dt) => this.frame(dt));

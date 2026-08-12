@@ -33,5 +33,7 @@ export interface GameMode {
   update(dt: number): void;
   /** Called when pointer lock is gained or lost, so modes can pause safely. */
   setActive(active: boolean): void;
+  /** Swaps to the other carried weapon; driven by Q or the touch button. */
+  swapWeapon(): void;
   dispose(): void;
 }
