@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PLAYER } from '../core/constants';
+import { GRAVITY, PLAYER } from '../core/constants';
 import type { BoxObstacle } from '../range/ShootingRange';
 import { clamp } from '../utils/math';
 
@@ -8,6 +8,19 @@ export interface MoveIntent {
   forward: number;
   /** -1 left, +1 right. */
   right: number;
+}
+
+/**
+ * Supplies the walkable floor height under a point. Multi storey maps provide
+ * one; the flat shooting range does not need to.
+ */
+export interface GroundSampler {
+  /**
+   * @param currentY the walker's current feet height, so overlapping floors
+   * can resolve to the one it is actually standing on.
+   * @returns floor height, or null when there is nothing to stand on.
+   */
+  sampleHeight(x: number, z: number, currentY: number): number | null;
 }
 
 const tmpWish = new THREE.Vector3();
@@ -23,8 +36,16 @@ export class Player {
   private bobPhase = 0;
   private bobHeight = 0;
   private strafeLean = 0;
+  /** Feet height. Stays 0 on flat maps. */
+  private groundY = 0;
+  private verticalVelocity = 0;
 
-  constructor(private readonly obstacles: readonly BoxObstacle[]) {}
+  constructor(
+    private readonly obstacles: readonly BoxObstacle[],
+    private readonly ground: GroundSampler | null = null,
+    /** The range keeps the player inside the stall; maps use walls instead. */
+    private readonly clampToBounds = true,
+  ) {}
 
   /** Current speed as a fraction of the base walk speed, for spread scaling. */
   get speedFraction(): number {
@@ -36,7 +57,20 @@ export class Player {
   }
 
   get eyeHeight(): number {
-    return PLAYER.eyeHeight + this.bobHeight;
+    return this.groundY + PLAYER.eyeHeight + this.bobHeight;
+  }
+
+  /** Feet height, for spawning and for zombie targeting. */
+  get feetHeight(): number {
+    return this.groundY;
+  }
+
+  /** Places the walker, e.g. at a map spawn point. */
+  teleport(x: number, y: number, z: number): void {
+    this.position.set(x, 0, z);
+    this.groundY = y;
+    this.verticalVelocity = 0;
+    this.velocity.set(0, 0, 0);
   }
 
   update(dt: number, intent: MoveIntent, yaw: number, speedMultiplier: number): void {
@@ -71,11 +105,45 @@ export class Player {
 
     this.position.addScaledVector(this.velocity, dt);
     this.resolveCollisions();
+    this.updateVertical(dt);
     this.updateViewBob(dt, intent.right);
+  }
+
+  /**
+   * Falls onto the floor below and steps up onto low ledges. Ramps stand in
+   * for staircases, so no explicit step climbing is needed.
+   */
+  private updateVertical(dt: number): void {
+    if (!this.ground) return;
+
+    const target = this.ground.sampleHeight(this.position.x, this.position.z, this.groundY);
+    if (target === null) {
+      // Nothing underneath: keep falling and let the map bounds catch it.
+      this.verticalVelocity -= GRAVITY * dt;
+      this.groundY += this.verticalVelocity * dt;
+      return;
+    }
+
+    if (this.groundY <= target + PLAYER.stepHeight) {
+      this.groundY = target;
+      this.verticalVelocity = 0;
+      return;
+    }
+
+    this.verticalVelocity -= GRAVITY * dt;
+    this.groundY += this.verticalVelocity * dt;
+    if (this.groundY < target) {
+      this.groundY = target;
+      this.verticalVelocity = 0;
+    }
   }
 
   private resolveCollisions(): void {
     const { bounds, radius } = PLAYER;
+    if (!this.clampToBounds) {
+      this.resolveObstacles();
+      return;
+    }
     if (this.position.x < bounds.minX + radius) {
       this.position.x = bounds.minX + radius;
       this.velocity.x = 0;
@@ -91,6 +159,11 @@ export class Player {
       this.velocity.z = 0;
     }
 
+    this.resolveObstacles();
+  }
+
+  private resolveObstacles(): void {
+    const { radius } = PLAYER;
     for (const box of this.obstacles) {
       const nearestX = clamp(this.position.x, box.minX, box.maxX);
       const nearestZ = clamp(this.position.z, box.minZ, box.maxZ);

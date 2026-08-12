@@ -1,34 +1,33 @@
-import { AudioSystem } from '../audio/AudioSystem';
-import { EffectsSystem } from '../effects/EffectsSystem';
-import { CameraRig } from '../player/CameraRig';
-import { Player, type MoveIntent } from '../player/Player';
-import { ShootingRange } from '../range/ShootingRange';
-import { TargetField } from '../range/TargetField';
-import { Environment } from '../rendering/Environment';
-import { RenderContext } from '../rendering/RenderContext';
-import { disposeGeneratedTextures } from '../rendering/textures';
-import { SceneScanner } from '../shooting/SceneScanner';
-import { ShootingSystem } from '../shooting/ShootingSystem';
-import { SessionStats } from '../stats/SessionStats';
-import { Hud, type HudState } from '../ui/Hud';
-import { ScopeOverlay } from '../ui/ScopeOverlay';
-import { StartScreen } from '../ui/StartScreen';
-import { clamp, DEG2RAD } from '../utils/math';
-import { WeaponSystem } from '../weapons/WeaponSystem';
-import { ViewModel } from '../weapons/viewmodel/ViewModel';
-import { GameLoop } from './GameLoop';
-import { Input, MOUSE_LEFT, MOUSE_RIGHT } from './Input';
+import * as THREE from 'three';
+import { EffectsSystem } from '../../effects/EffectsSystem';
+import { CameraRig } from '../../player/CameraRig';
+import { Player, type MoveIntent } from '../../player/Player';
+import { ShootingRange } from '../../range/ShootingRange';
+import { TargetField } from '../../range/TargetField';
+import { Environment } from '../../rendering/Environment';
+import { SceneScanner } from '../../shooting/SceneScanner';
+import { ShootingSystem } from '../../shooting/ShootingSystem';
+import { SessionStats } from '../../stats/SessionStats';
+import { Hud, type HudState } from '../../ui/Hud';
+import { ScopeOverlay } from '../../ui/ScopeOverlay';
+import { clamp, DEG2RAD } from '../../utils/math';
+import { WeaponSystem } from '../../weapons/WeaponSystem';
+import { ViewModel } from '../../weapons/viewmodel/ViewModel';
+import { MOUSE_LEFT, MOUSE_RIGHT } from '../Input';
+import type { GameMode, ModeContext } from './GameMode';
 
 const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'];
 const CROSSHAIR_MIN_RADIUS = 4;
 const CROSSHAIR_MAX_RADIUS = 140;
 
 /**
- * Wires the systems together and owns the frame order. Everything else stays
- * unaware of the others.
+ * The shooting range: lanes, steel plates and score keeping. Owns its own
+ * world scene and the frame order for range gameplay.
  */
-export class Game {
-  private readonly render: RenderContext;
+export class RangeMode implements GameMode {
+  readonly id = 'range' as const;
+  readonly world = new THREE.Scene();
+
   private readonly environment: Environment;
   private readonly range: ShootingRange;
   private readonly targets: TargetField;
@@ -37,15 +36,12 @@ export class Game {
   private readonly cameraRig: CameraRig;
   private readonly viewModel: ViewModel;
   private readonly effects: EffectsSystem;
-  private readonly audio = new AudioSystem();
+
   private readonly stats = new SessionStats();
   private readonly shooting: ShootingSystem;
   private readonly weapons: WeaponSystem;
   private readonly hud: Hud;
   private readonly scope: ScopeOverlay;
-  private readonly startScreen: StartScreen;
-  private readonly input: Input;
-  private readonly loop: GameLoop;
 
   private readonly intent: MoveIntent = { forward: 0, right: 0 };
   private readonly hudState: HudState = {
@@ -64,24 +60,23 @@ export class Game {
     fps: 60,
   };
 
-  constructor(container: HTMLElement) {
-    this.render = new RenderContext(container);
-    this.environment = new Environment(this.render.scene, this.render.viewScene);
-    this.range = new ShootingRange(this.render.scene);
-    this.targets = new TargetField(this.render.scene);
+  constructor(private readonly context: ModeContext) {
+    this.environment = new Environment(this.world);
+    this.range = new ShootingRange(this.world);
+    this.targets = new TargetField(this.world);
     this.scanner = new SceneScanner([...this.range.colliders, ...this.targets.colliders]);
 
     this.player = new Player(this.range.obstacles);
-    this.cameraRig = new CameraRig(this.render.camera);
-    this.viewModel = new ViewModel(this.render.viewScene);
-    this.effects = new EffectsSystem(this.render.scene);
+    this.cameraRig = new CameraRig(context.render.camera);
+    this.viewModel = new ViewModel(context.render.viewScene);
+    this.effects = new EffectsSystem(this.world);
 
     this.shooting = new ShootingSystem({
-      camera: this.render.camera,
+      camera: context.render.camera,
       viewModel: this.viewModel,
       scanner: this.scanner,
       effects: this.effects,
-      audio: this.audio,
+      audio: context.audio,
       stats: this.stats,
     });
     this.shooting.onTargetHit = (info) => this.hud.flashHit(info.offCenter < 0.25);
@@ -90,70 +85,41 @@ export class Game {
       cameraRig: this.cameraRig,
       viewModel: this.viewModel,
       shooting: this.shooting,
-      audio: this.audio,
+      audio: context.audio,
     });
 
-    this.hud = new Hud(container);
-    this.scope = new ScopeOverlay(container);
-    this.startScreen = new StartScreen(container, () => this.requestStart());
-
-    this.input = new Input(this.render.domElement);
-    this.input.onLockChange = (locked) => this.handleLockChange(locked);
-
-    this.loop = new GameLoop((dt) => this.frame(dt));
+    this.hud = new Hud(context.container);
+    this.scope = new ScopeOverlay(context.container);
 
     this.syncWeaponHud();
-    this.render.refreshShadows();
+    context.render.refreshShadows();
   }
 
-  start(): void {
-    this.loop.start();
+  setActive(active: boolean): void {
+    this.hud.setVisible(active);
+    if (active) return;
+    this.weapons.setTrigger(false);
+    this.weapons.setAds(false);
+    this.scope.setVisible(false);
   }
 
   dispose(): void {
-    this.loop.stop();
-    this.input.dispose();
     this.hud.dispose();
     this.scope.dispose();
-    this.startScreen.dispose();
     this.viewModel.dispose();
     this.effects.dispose();
     this.targets.dispose();
     this.range.dispose();
     this.environment.dispose();
-    this.audio.dispose();
-    disposeGeneratedTextures();
-    this.render.dispose();
   }
 
-  private requestStart(): void {
-    this.audio.resume();
-    this.input.requestPointerLock();
-  }
-
-  private handleLockChange(locked: boolean): void {
-    this.hud.setVisible(locked);
-    if (locked) {
-      this.startScreen.hide();
-      return;
-    }
-    this.weapons.setTrigger(false);
-    this.weapons.setAds(false);
-    this.scope.setVisible(false);
-    this.startScreen.show(true);
-  }
-
-  private frame(dt: number): void {
-    if (this.input.isLocked) {
-      this.simulate(dt);
-      this.updateHud();
-    }
-    this.render.render();
-    this.input.endFrame();
+  update(dt: number): void {
+    this.simulate(dt);
+    this.updateHud();
   }
 
   private simulate(dt: number): void {
-    const input = this.input;
+    const input = this.context.input;
 
     this.handleActionKeys();
 
@@ -183,12 +149,12 @@ export class Game {
     this.weapons.updateFiring(dt, moveFraction, lookX, lookY);
     this.shooting.update(dt);
     this.targets.update(dt);
-    this.effects.update(dt, this.shooting.ballistics, this.render.camera.quaternion);
+    this.effects.update(dt, this.shooting.ballistics, this.context.render.camera.quaternion);
     this.scope.setVisible(this.weapons.isScoped);
   }
 
   private handleActionKeys(): void {
-    const input = this.input;
+    const input = this.context.input;
 
     for (let slot = 0; slot < WEAPON_KEYS.length; slot++) {
       if (input.wasKeyPressed(WEAPON_KEYS[slot])) {
@@ -229,14 +195,14 @@ export class Game {
     state.hideCrosshair = this.weapons.adsProgress > 0.55;
     state.reloading = weapon.isReloading;
     state.empty = weapon.isEmpty;
-    state.fps = this.loop.fps;
+    state.fps = this.context.fps();
 
     this.hud.update(state);
   }
 
   /** Converts the current cone half angle into a screen space radius. */
   private crosshairRadius(): number {
-    const camera = this.render.camera;
+    const camera = this.context.render.camera;
     const halfHeight = window.innerHeight * 0.5;
     const halfFov = Math.tan(camera.fov * DEG2RAD * 0.5);
     const pixels = (Math.tan(this.weapons.spreadAngle) / halfFov) * halfHeight;

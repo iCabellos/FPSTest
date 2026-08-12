@@ -1,12 +1,23 @@
-# Three.js Shooting Range
+# Mansion Protocol
 
-A small browser FPS shooting range built with Three.js and TypeScript. Four weapons
-(M4A1, AK-47, M60, L96A1), four firing lanes, steel plates at 25 / 50 / 100 / 200 m,
-and a gunplay model built around recoil patterns, weapon bloom and travelling
-projectiles rather than instant hitscan.
+A browser FPS built with Three.js and TypeScript. Two modes share one engine:
+a finished **shooting range**, and a **zombies survival mode** that is
+currently under construction (see [Zombies mode](#zombies-mode) for exactly
+what is built and what is not).
+
+The shooting range is complete and playable: seven weapons across rifles, a
+belt fed machine gun, a bolt action and three submachine guns, four firing
+lanes, steel plates at 25 / 50 / 100 / 200 m, and a gunplay model built around
+recoil patterns, weapon bloom and travelling projectiles rather than instant
+hitscan.
 
 The goal is *playable realism*: weapons behave the way their category suggests, but
 every number is tuned for feel, not copied from ballistic tables.
+
+## Modes
+
+Launching the game shows a mode menu. `SHOOTING RANGE` is fully playable.
+Losing pointer lock pauses whichever mode is loaded and offers resume or quit.
 
 ## Tech stack
 
@@ -30,7 +41,7 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
-Click the title screen to lock the pointer and start shooting.
+Pick a mode from the menu to lock the pointer and start shooting.
 
 ### Commands
 
@@ -55,18 +66,21 @@ Click the title screen to lock the pointer and start shooting.
 | `R`     | Reload                            |
 | `B`     | Toggle fire mode (where available)|
 | `1-4`   | M4A1 / AK-47 / M60 / L96A1        |
+| `5-7`   | MP5 / MP7 / UMP45                 |
 | `T`     | Reset targets and statistics      |
-| `ESC`   | Release pointer lock              |
+| `ESC`   | Pause (releases pointer lock)     |
 
 ## Architecture
 
-Composition over inheritance, one responsibility per module, no globals. `Game` is
-the only place that knows about more than its own concern: it owns the frame order
-and wires the systems together.
+Composition over inheritance, one responsibility per module, no globals. `App`
+owns the shell and swaps modes; each mode is the only place that knows about
+more than its own concern, owning the frame order for its own gameplay.
 
 ```
 src/
-  core/        Game (wiring + frame order), GameLoop, Input, constants
+  core/        App (shell: renderer, input, audio, loop, mode swapping),
+               GameLoop, Input, constants,
+               modes/ (GameMode contract, RangeMode)
   player/      Player (movement, collision, view bob), CameraRig (look, recoil, FOV)
   weapons/     WeaponDefinition (types), definitions/ (the four weapons),
                Weapon (state machine), WeaponSystem (loadout, ADS, feel),
@@ -78,10 +92,20 @@ src/
   rendering/   RenderContext (two pass renderer), Environment (lighting), textures
   audio/       AudioSystem (procedural synthesis, sample-ready)
   stats/       SessionStats
-  ui/          Hud, ScopeOverlay, StartScreen
+  map/         Mansion (procedural three storey map), Barrier, NavGraph
+  zombies/     Zombie, ZombieManager (pool + instanced crowd + AI)
+  rounds/      RoundManager (authoritative round state)
+  ui/          MainMenu, Hud, ScopeOverlay
   utils/       math, Random, three helpers
-tests/         weapon, ballistics, feel (recoil / spread / stats / definitions)
+tests/         weapon, ballistics, feel, models, zombies
 ```
+
+### The app shell
+
+`App` owns the renderer, input, audio and the frame loop, and swaps whole
+modes in and out. A mode owns its own world scene and tears it down on exit,
+so modes never see each other. The first person weapon scene is shared and
+lit once by the shell.
 
 ### Frame order
 
@@ -119,6 +143,14 @@ Nothing is subclassed per weapon; the personality comes from configuration.
 | AK-47  | auto/semi  | 600 | 30  | 2.7 s  | Heavy kick, wide horizontal walk, punishing long bursts |
 | M60    | auto       | 550 | 100 | 6.0 s  | Slow to raise, slow to move, bloom grows fast           |
 | L96A1  | semi       | 90  | 10  | 3.4 s  | Bolt action, 6x scope, precise, one shot at a time      |
+| MP5    | auto/semi  | 800 | 30  | 2.6 s  | Flat and controllable, slow arcing 9 mm                 |
+| MP7    | auto/semi  | 950 | 40  | 2.4 s  | Fastest cadence, lightest kick, wanders sideways        |
+| UMP45  | auto/semi  | 600 | 25  | 2.9 s  | Slow thumping .45 that drops hard past 100 m            |
+
+Each weapon carries the sight picture it is known for — an A2 carry handle
+aperture, an AK notch on the barrel trunnion, a leaf notch with an eared blade,
+an HK rotary drum, a flip up ghost ring, a hooded notch — built on a shared
+sight line so ADS aligns itself from the model's own anchor.
 
 ### Recoil
 
@@ -171,6 +203,42 @@ than hand-tuned offsets, so a new model aligns itself.
 The L96 scope costs nothing extra to render: the camera FOV does the magnification
 and a CSS overlay masks everything outside the ocular. The weapon is hidden once the
 ADS blend passes the scope threshold. There is no second scene and no render target.
+
+## Zombies mode
+
+Under construction. This section states exactly what exists today so nothing
+here is mistaken for a finished feature.
+
+**Built and unit tested:**
+
+- **Mansion map** (`map/Mansion.ts`) — procedural, three interior storeys plus
+  a roof terrace, joined by ramped staircases. Ramps stand in for steps so no
+  step-climbing logic is needed. Rooms are laid out for zombie play: movement
+  loops, a couple of choke points and defendable corners.
+- **Paid barriers** (`map/Barrier.ts`) — doors, double doors and debris piles
+  with escalating costs from $750 to $2500. A closed barrier blocks bullets,
+  movement *and* navigation; opening one animates and is permanent.
+- **Navigation** (`map/NavGraph.ts`) — a waypoint graph rather than a grid, so
+  three floors and stairs stay cheap. A doorway is a single gated edge, so a
+  closed barrier genuinely removes the route instead of relying on collision.
+  Pathfinding reuses preallocated scratch buffers.
+- **Zombies** (`zombies/`) — a fixed pool with idle / chase / attack / hurt /
+  dead states, target selection, melee on a cooldown, and a segment-intersect
+  query for hit detection. The whole crowd renders as four `InstancedMesh`
+  layers (torso, head, two arms), so hundreds of walkers cost four draw calls
+  and nothing is created or destroyed while playing.
+- **Rounds** (`rounds/RoundManager.ts`) — authoritative round state with the
+  strict rule that a round is finished only once every zombie belonging to it
+  has both spawned *and* died. Clearing the map is not enough while walkers are
+  still queued. Budgets grow per round and per player, with a live cap.
+- **Vertical movement** — `Player` now takes an optional `GroundSampler`, so it
+  falls, lands and walks up ramps on multi storey maps. The range passes none
+  and behaves exactly as before.
+
+**Not built yet:** the mode that wires these together, co-op networking, the
+Pack-a-Punch machine, the ten additional weapons, and the slot machine special
+weapon with its pity and nuclear jackpot. The mode menu deliberately does not
+offer Zombies until it is playable, rather than showing a dead button.
 
 ## Performance
 
@@ -240,13 +308,20 @@ buffer is played instead of the synth. No other code changes.
 
 ## Testing
 
-`npm test` covers the deterministic logic, which is where the bugs actually live:
+`npm test` covers the deterministic logic, which is where the bugs actually
+live. For the range: 
 cadence and frame-rate independence, magazine and reload, semi vs auto trigger
 behaviour, fire mode switching, the bolt cycle, dry firing, equip timing, recoil
 accumulation and recovery, pattern determinism under a seeded RNG, per-weapon recoil
 ordering, spread bloom and ceilings, projectile time of flight and drop, pool
 recycling, accuracy statistics and definition sanity. Three.js rendering itself is
 not unit tested; it is verified by running the game.
+
+For the zombies systems: navigation over open and gated graphs, route choice,
+barrier gating in both directions, zombie damage and death, and the full round
+lifecycle — spawn gating, the live cap, the "not finished while walkers are
+queued" rule, intermission, round advance, and early completion leaving no
+pending spawns.
 
 ## Known limitations
 
