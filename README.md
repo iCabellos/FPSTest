@@ -26,12 +26,18 @@ Losing pointer lock pauses whichever mode is loaded and offers resume or quit.
 
 ### Mobile
 
-On a touchscreen the game mounts two thumb sticks and skips pointer lock
-entirely; a desktop never sees them. The left stick moves and stays invisible
-until a thumb lands on it, appearing wherever you press. The right stick aims:
-it locks onto the nearest walker ahead the moment you press it, opens fire
-half a second later, and if you keep dragging it also swings the camera, at a
-lower sensitivity than a mouse so steering and aiming do not fight.
+On a touchscreen the game mounts a touch layer and skips pointer lock entirely;
+a desktop never sees it.
+
+- **Left half** — a movement stick, invisible until a thumb lands on it, which
+  appears wherever you press.
+- **Right half** — drag anywhere to look around, using raw pixel deltas so it
+  feels the same as a mouse.
+- **FIRE** — always visible and semi transparent. It locks onto the nearest
+  walker ahead the moment you press it and opens fire half a second later, so
+  a thumb never has to track a target.
+- **SWAP** — changes to your other weapon.
+- **MENU**, top left — leaves the match.
 
 ## Tech stack
 
@@ -56,6 +62,17 @@ npm run dev      # http://localhost:5173
 ```
 
 Pick a mode from the menu to lock the pointer and start shooting.
+
+### Deployment
+
+Every push and pull request runs `.github/workflows/ci.yml`: type check, lint,
+tests and a production build, with the built `dist/` uploaded as an artifact.
+
+Production hosting is Vercel, connected to this repository. Pull requests get a
+preview deployment and merging to `main` promotes to production, so the
+pipeline is: green CI on the PR → merge → Vercel builds and deploys `main`.
+`npm run build` is the same command Vercel runs, so a green build locally is
+the same build that ships.
 
 ### Commands
 
@@ -225,10 +242,16 @@ here is mistaken for a finished feature.
 
 **Built and unit tested:**
 
-- **Mansion map** (`map/Mansion.ts`) — procedural, three interior storeys plus
-  a roof terrace, joined by ramped staircases. Ramps stand in for steps so no
-  step-climbing logic is needed. Rooms are laid out for zombie play: movement
-  loops, a couple of choke points and defendable corners.
+- **Mansion map** (`map/layout.ts`, `map/Mansion.ts`) — one flat, fully
+  enclosed storey generated from a declarative floor plan. The plan is the
+  single source of truth: geometry, player collision and the navigation graph
+  are all derived from it, so a wall always blocks what it looks like it
+  blocks and a navigation edge always follows a real opening. Doorways are cut
+  out of wall runs rather than placed by hand. Eight rooms — foyer, great hall,
+  kitchen, library, dining room, study, gallery and vault — laid out with loops
+  so you can always circle back rather than being funnelled down a corridor.
+  Each room has its own flooring, and the wall and floor textures carry the
+  outbreak: damp running from the ceiling, panelling, grime and dried blood.
 - **Paid barriers** (`map/Barrier.ts`) — doors, double doors and debris piles
   with escalating costs from $750 to $2500. A closed barrier blocks bullets,
   movement *and* navigation; opening one animates and is permanent.
@@ -245,9 +268,9 @@ here is mistaken for a finished feature.
   strict rule that a round is finished only once every zombie belonging to it
   has both spawned *and* died. Clearing the map is not enough while walkers are
   still queued. Budgets grow per round and per player, with a live cap.
-- **Vertical movement** — `Player` now takes an optional `GroundSampler`, so it
-  falls, lands and walks up ramps on multi storey maps. The range passes none
-  and behaves exactly as before.
+- **Vertical movement** — `Player` takes an optional `GroundSampler` for maps
+  that need it. The mansion is flat and sealed, so it passes none and is
+  contained by real walls instead of an invisible box.
 
 **Playable now.** `ZOMBIES` runs solo end to end: pick a pistol, spawn in the
 entry hall, survive rounds, earn points for hits and kills, and buy your way

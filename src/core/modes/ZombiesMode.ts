@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { EffectsSystem } from '../../effects/EffectsSystem';
 import { resolveLoadout } from '../../loadout/loadout';
-import { FLOOR_Y, Mansion } from '../../map/Mansion';
+import { Mansion } from '../../map/Mansion';
+import { WALL_HEIGHT } from '../../map/layout';
 import { CameraRig } from '../../player/CameraRig';
 import { Player, type MoveIntent } from '../../player/Player';
+import type { BoxObstacle } from '../../range/ShootingRange';
 import { SceneScanner } from '../../shooting/SceneScanner';
 import { ShootingSystem } from '../../shooting/ShootingSystem';
 import { RoundManager } from '../../rounds/RoundManager';
@@ -57,6 +59,7 @@ export class ZombiesMode implements GameMode {
 
   private readonly intent: MoveIntent = { forward: 0, right: 0 };
   private readonly colliders: THREE.Object3D[] = [];
+  private readonly obstacles: BoxObstacle[] = [];
   private readonly targets: ZombieTarget[] = [];
 
   private points = START_POINTS;
@@ -87,12 +90,10 @@ export class ZombiesMode implements GameMode {
     this.buildLighting();
 
     this.mansion = new Mansion(this.world);
-    this.player = new Player(this.mansion.obstacles, this.mansion, false);
-    this.player.teleport(
-      this.mansion.playerSpawn.x,
-      this.mansion.playerSpawn.y,
-      this.mansion.playerSpawn.z,
-    );
+    // The map is flat and sealed, so the walker needs no ground sampling and
+    // is contained by real walls rather than an invisible box.
+    this.player = new Player(this.mansion.collectObstacles(this.obstacles), null, false);
+    this.player.position.set(this.mansion.playerSpawn.x, 0, this.mansion.playerSpawn.z);
 
     this.cameraRig = new CameraRig(context.render.camera);
     this.viewModel = new ViewModel(context.render.viewScene);
@@ -129,6 +130,10 @@ export class ZombiesMode implements GameMode {
     this.rounds.begin();
 
     context.render.refreshShadows();
+  }
+
+  swapWeapon(): void {
+    this.weapons.swap();
   }
 
   setActive(active: boolean): void {
@@ -340,8 +345,9 @@ export class ZombiesMode implements GameMode {
     barrier.open();
     this.context.audio.play('charge', 1);
     this.showBanner(`${reachable.label} OPEN`);
-    // Opening a route changes what bullets can pass through.
+    // Opening a route changes what bullets and bodies can pass through.
     this.mansion.collectColliders(this.colliders);
+    this.mansion.collectObstacles(this.obstacles);
   }
 
   // --------------------------------------------------------------------- ui
@@ -378,16 +384,36 @@ export class ZombiesMode implements GameMode {
   }
 
   private buildLighting(): void {
-    this.world.add(new THREE.HemisphereLight(0x93a7bd, 0x2a2f38, 1.15));
-    this.world.add(new THREE.AmbientLight(0x6f7c8c, 0.5));
+    // An interior with a ceiling gets no sky, so the ambient and hemisphere
+    // terms carry the room and the lamps only add mood on top.
+    this.world.add(new THREE.HemisphereLight(0x8ea3bb, 0x40342a, 2.4));
+    this.world.add(new THREE.AmbientLight(0x6f7d8c, 1.05));
 
-    // One raking key light per storey keeps the interior readable without
-    // paying for shadow casting lights.
-    for (const y of FLOOR_Y) {
-      const key = new THREE.DirectionalLight(0xdfe8f5, 0.85);
-      key.position.set(12, y + 6, 10);
-      key.target.position.set(-6, y, -6);
-      this.world.add(key, key.target);
+    const key = new THREE.DirectionalLight(0xdbe6f4, 1.15);
+    key.position.set(14, 12, 16);
+    key.target.position.set(-4, 0, -8);
+    this.world.add(key, key.target);
+
+    const rim = new THREE.DirectionalLight(0xffb277, 0.5);
+    rim.position.set(-16, 9, -18);
+    this.world.add(rim);
+
+    // Failing lamps hanging in each wing: warm pools that pick out the rooms
+    // and give the place somewhere to walk toward.
+    const lamps: Array<[number, number, number]> = [
+      [0, 10, 0xffcf8a],
+      [0, 1, 0xffcf8a],
+      [-12, 6, 0xffb877],
+      [12, 6, 0xffb877],
+      [-12, -7, 0xff9d6a],
+      [12, -7, 0xff9d6a],
+      [0, -9, 0xbfd4ff],
+      [0, -18, 0x9fc4ff],
+    ];
+    for (const [x, z, colour] of lamps) {
+      const lamp = new THREE.PointLight(colour, 14, 16, 2);
+      lamp.position.set(x, WALL_HEIGHT - 0.5, z);
+      this.world.add(lamp);
     }
   }
 }

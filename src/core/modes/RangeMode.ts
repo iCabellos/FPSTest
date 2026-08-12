@@ -95,6 +95,11 @@ export class RangeMode implements GameMode {
     context.render.refreshShadows();
   }
 
+  swapWeapon(): void {
+    this.weapons.swap();
+    this.syncWeaponHud();
+  }
+
   setActive(active: boolean): void {
     this.hud.setVisible(active);
     if (active) return;

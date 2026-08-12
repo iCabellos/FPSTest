@@ -733,11 +733,12 @@ canvas {
   left: 0;
 }
 
-.touch__zone--fire {
+/* Drag anywhere on the right to look around. */
+.touch__zone--look {
   right: 0;
 }
 
-/* The stick is invisible until a thumb lands on it. */
+/* The movement stick is invisible until a thumb lands on it. */
 .touch__ring {
   position: absolute;
   width: 124px;
@@ -755,11 +756,6 @@ canvas {
   opacity: 1;
 }
 
-.touch__zone--fire .touch__ring {
-  border-color: rgba(255, 207, 92, 0.3);
-  background: rgba(255, 207, 92, 0.07);
-}
-
 .touch__knob {
   position: absolute;
   top: 50%;
@@ -771,6 +767,55 @@ canvas {
   background: rgba(255, 255, 255, 0.24);
 }
 
-.touch__zone--fire .touch__knob {
-  background: rgba(255, 207, 92, 0.42);
+.touch__button {
+  position: absolute;
+  appearance: none;
+  font: inherit;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  touch-action: none;
+  transition:
+    background 0.1s ease,
+    transform 0.08s ease;
+}
+
+.touch__button--fire {
+  right: 26px;
+  bottom: 30px;
+  width: 108px;
+  height: 108px;
+  font-size: 13px;
+  background: rgba(255, 207, 92, 0.16);
+  border-color: rgba(255, 207, 92, 0.45);
+  color: rgba(255, 231, 168, 0.95);
+}
+
+.touch__button--held {
+  transform: scale(0.94);
+  background: rgba(255, 207, 92, 0.3);
+}
+
+.touch__button--firing {
+  background: rgba(255, 92, 74, 0.42);
+  border-color: rgba(255, 130, 110, 0.8);
+}
+
+.touch__button--swap {
+  right: 150px;
+  bottom: 46px;
+  width: 72px;
+  height: 72px;
+  font-size: 11px;
+}
+
+.touch__button--exit {
+  left: 20px;
+  top: 20px;
+  width: 62px;
+  height: 62px;
+  font-size: 11px;
+  border-radius: 8px;
 }
