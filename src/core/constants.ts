@@ -12,6 +12,8 @@ export const PLAYER = {
   bounds: { minX: -8.6, maxX: 8.6, minZ: 1.15, maxZ: 7.6 },
   bobFrequency: 9.5,
   bobAmplitude: 0.035,
+  /** Ledge height the walker steps onto instead of falling off. */
+  stepHeight: 0.45,
 } as const;
 
 export const CAMERA = {

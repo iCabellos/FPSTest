@@ -2,10 +2,17 @@ export const MOUSE_LEFT = 0;
 export const MOUSE_RIGHT = 2;
 
 /**
- * Browsers occasionally deliver one huge movement value right after pointer
- * lock engages, which would fling the view. Anything past this is dropped.
+ * Browsers can deliver a huge movement value right after pointer lock engages,
+ * which would fling the view. Anything past this is dropped.
  */
 const MAX_MOVEMENT_PER_EVENT = 180;
+
+/**
+ * Some browsers recentre the cursor when the lock is acquired and report the
+ * jump as ordinary movement, sometimes split across several events. Motion is
+ * ignored for this long after locking, which is imperceptible to the player.
+ */
+const LOCK_SETTLE_MS = 150;
 
 type Listener = { target: EventTarget; type: string; fn: EventListener };
 
@@ -23,7 +30,7 @@ export class Input {
   private lookX = 0;
   private lookY = 0;
   private locked = false;
-  private ignoreNextMove = false;
+  private ignoreMovementUntil = 0;
 
   onLockChange: ((locked: boolean) => void) | null = null;
 
@@ -103,10 +110,7 @@ export class Input {
 
   private handleMouseMove(event: MouseEvent): void {
     if (!this.locked) return;
-    if (this.ignoreNextMove) {
-      this.ignoreNextMove = false;
-      return;
-    }
+    if (performance.now() < this.ignoreMovementUntil) return;
     if (Math.abs(event.movementX) > MAX_MOVEMENT_PER_EVENT) return;
     if (Math.abs(event.movementY) > MAX_MOVEMENT_PER_EVENT) return;
     this.lookX += event.movementX;
@@ -125,7 +129,7 @@ export class Input {
 
   private handleLockChange(): void {
     this.locked = document.pointerLockElement === this.element;
-    this.ignoreNextMove = this.locked;
+    if (this.locked) this.ignoreMovementUntil = performance.now() + LOCK_SETTLE_MS;
     if (!this.locked) this.clearTransientState();
     this.onLockChange?.(this.locked);
   }

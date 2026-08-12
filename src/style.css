@@ -403,3 +403,125 @@ canvas {
   max-width: 460px;
   line-height: 1.6;
 }
+
+/* ---------- Menu ---------- */
+
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 35%, rgba(18, 24, 32, 0.86), rgba(5, 7, 10, 0.97));
+}
+
+.menu--hidden {
+  display: none;
+}
+
+.menu__title {
+  margin: 0;
+  font-size: clamp(26px, 4.6vw, 52px);
+  letter-spacing: 0.26em;
+  font-weight: 600;
+}
+
+.menu__title--small {
+  font-size: clamp(20px, 3vw, 30px);
+  opacity: 0.7;
+}
+
+.menu__subtitle {
+  font-size: 11px;
+  letter-spacing: 0.42em;
+  color: var(--hud-dim);
+  margin-top: -14px;
+}
+
+.menu__panel {
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: min(360px, 86vw);
+}
+
+.menu__panel--active {
+  display: flex;
+}
+
+.menu__label {
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  color: var(--hud-dim);
+  margin-bottom: 4px;
+}
+
+.menu__button {
+  appearance: none;
+  padding: 14px 20px;
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--hud-fg);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    transform 0.08s ease;
+}
+
+.menu__button:hover:not(:disabled) {
+  background: rgba(255, 207, 92, 0.14);
+  border-color: var(--hud-accent);
+}
+
+.menu__button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.menu__button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.menu__button--primary {
+  border-color: rgba(255, 207, 92, 0.5);
+  color: var(--hud-accent);
+}
+
+.menu__button--ghost {
+  font-size: 12px;
+  padding: 10px 16px;
+  color: var(--hud-dim);
+}
+
+.menu__hint {
+  font-size: 11px;
+  color: #6c7885;
+  margin: -4px 0 8px;
+  line-height: 1.5;
+}
+
+.menu__controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 20px;
+  font-size: 12px;
+  color: var(--hud-dim);
+  text-align: left;
+  margin-top: 8px;
+}
+
+.menu__key {
+  color: var(--hud-fg);
+  letter-spacing: 0.08em;
+}

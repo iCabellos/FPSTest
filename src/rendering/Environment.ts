@@ -10,7 +10,9 @@ export class Environment {
   readonly sun: THREE.DirectionalLight;
   private readonly skyDome: THREE.Mesh;
 
-  constructor(scene: THREE.Scene, viewScene: THREE.Scene) {
+  constructor(scene: THREE.Scene) {
+    scene.fog = new THREE.FogExp2(0xa8bcd0, RENDER.fogDensity);
+
     const skyTexture = createSkyTexture();
     const skyGeometry = new THREE.SphereGeometry(600, 24, 12);
     const skyMaterial = new THREE.MeshBasicMaterial({
@@ -48,14 +50,6 @@ export class Environment {
     scene.add(this.sun);
     scene.add(this.sun.target);
 
-    // The weapon pass has its own scene, so it needs its own (cheap) lights.
-    viewScene.add(new THREE.HemisphereLight(0xc8dcf0, 0x6d6a63, 2));
-    const viewKey = new THREE.DirectionalLight(0xfff4e2, 2.6);
-    viewKey.position.set(0.6, 1.2, 0.9);
-    viewScene.add(viewKey);
-    const viewRim = new THREE.DirectionalLight(0x9fc0e8, 0.8);
-    viewRim.position.set(-0.9, 0.3, -0.7);
-    viewScene.add(viewRim);
   }
 
   dispose(): void {
