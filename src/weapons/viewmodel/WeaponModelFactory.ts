@@ -614,6 +614,88 @@ function assemble(
   };
 }
 
+/**
+ * Shared pistol skeleton: slide over frame, grip raked back, magazine inside
+ * the grip. The two sidearms differ in slide bulk, sight style and magazine
+ * depth so they read apart instantly in the hand.
+ */
+function buildPistol(
+  m: WeaponMaterials,
+  options: {
+    slideHeight: number;
+    slideLength: number;
+    barrelRadius: number;
+    magazineHeight: number;
+    notchGap: number;
+    /** Ribbed slide serrations sit further back on the heavier gun. */
+    heavy: boolean;
+  },
+): WeaponModel {
+  const sightY = options.slideHeight * 0.5 + 0.026;
+  const slide = box(
+    m.darkMetal,
+    [0.032, options.slideHeight, options.slideLength],
+    [0, 0.012, -options.slideLength / 2 + 0.06],
+  );
+  const magazine = straightMagazine(
+    m.metal,
+    0.024,
+    options.magazineHeight,
+    0.036,
+    [0, -0.035, 0.035],
+    0.3,
+  );
+
+  const parts: THREE.Object3D[] = [
+    slide,
+    // Frame, dust cover and trigger guard.
+    box(m.metal, [0.028, 0.03, options.slideLength * 0.7], [0, -0.02, -0.05]),
+    box(m.polymer, [0.03, 0.09, 0.042], [0, -0.075, 0.04], [0.36, 0, 0]),
+    box(m.darkMetal, [0.024, 0.007, 0.05], [0, -0.038, -0.02]),
+    box(m.darkMetal, [0.022, 0.026, 0.007], [0, -0.026, -0.045]),
+    box(m.metal, [0.005, 0.019, 0.007], [0, -0.03, -0.028], [0.2, 0, 0]),
+    // Barrel poking out of the slide.
+    tube(m.metal, options.barrelRadius, options.barrelRadius, 0.05, [0, 0.012, -options.slideLength + 0.05], 8),
+    // Slide serrations.
+    box(m.metal, [0.034, options.slideHeight * 0.8, 0.03], [0, 0.012, options.heavy ? 0.05 : 0.03]),
+    // Hammer.
+    box(m.metal, [0.012, 0.022, 0.01], [0, 0.03, 0.062], [-0.4, 0, 0]),
+    ...notchRearSight(m, 0.055, sightY, sightY - 0.016, options.notchGap),
+    box(m.darkMetal, [0.005, 0.014, 0.006], [0, sightY - 0.006, -options.slideLength + 0.09]),
+    magazine,
+  ];
+
+  return assemble(parts, {
+    muzzle: anchor([0, 0.012, -options.slideLength + 0.02]),
+    ejectionPort: anchor([0.022, 0.03, 0.02]),
+    sight: anchor([0, sightY, 0.055]),
+    bolt: slide,
+    magazine,
+  });
+}
+
+function buildM9(m: WeaponMaterials): WeaponModel {
+  return buildPistol(m, {
+    slideHeight: 0.044,
+    slideLength: 0.24,
+    barrelRadius: 0.0075,
+    magazineHeight: 0.115,
+    notchGap: 0.011,
+    heavy: false,
+  });
+}
+
+function buildM1911(m: WeaponMaterials): WeaponModel {
+  return buildPistol(m, {
+    slideHeight: 0.05,
+    slideLength: 0.22,
+    barrelRadius: 0.0095,
+    magazineHeight: 0.095,
+    notchGap: 0.009,
+    heavy: true,
+  });
+}
+
 const BUILDERS: Record<WeaponId, (materials: WeaponMaterials) => WeaponModel> = {
   m4a1: buildM4A1,
   ak47: buildAK47,
@@ -622,6 +704,8 @@ const BUILDERS: Record<WeaponId, (materials: WeaponMaterials) => WeaponModel> = 
   mp5: buildMP5,
   mp7: buildMP7,
   ump45: buildUMP45,
+  m9: buildM9,
+  m1911: buildM1911,
 };
 
 export function createWeaponModel(id: WeaponId, materials: WeaponMaterials): WeaponModel {

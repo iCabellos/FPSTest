@@ -13,10 +13,10 @@ import { ScopeOverlay } from '../../ui/ScopeOverlay';
 import { clamp, DEG2RAD } from '../../utils/math';
 import { WeaponSystem } from '../../weapons/WeaponSystem';
 import { ViewModel } from '../../weapons/viewmodel/ViewModel';
+import { resolveLoadout } from '../../loadout/loadout';
 import { MOUSE_LEFT, MOUSE_RIGHT } from '../Input';
 import type { GameMode, ModeContext } from './GameMode';
 
-const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'];
 const CROSSHAIR_MIN_RADIUS = 4;
 const CROSSHAIR_MAX_RADIUS = 140;
 
@@ -86,6 +86,7 @@ export class RangeMode implements GameMode {
       viewModel: this.viewModel,
       shooting: this.shooting,
       audio: context.audio,
+      loadout: resolveLoadout(context.loadout),
     });
 
     this.hud = new Hud(context.container);
@@ -156,11 +157,9 @@ export class RangeMode implements GameMode {
   private handleActionKeys(): void {
     const input = this.context.input;
 
-    for (let slot = 0; slot < WEAPON_KEYS.length; slot++) {
-      if (input.wasKeyPressed(WEAPON_KEYS[slot])) {
-        this.weapons.selectSlot(slot);
-        this.syncWeaponHud();
-      }
+    if (input.wasKeyPressed('KeyQ')) {
+      this.weapons.swap();
+      this.syncWeaponHud();
     }
 
     if (input.wasKeyPressed('KeyR')) this.weapons.requestReload();

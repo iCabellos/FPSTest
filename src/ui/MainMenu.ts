@@ -1,4 +1,4 @@
-export type MenuAction = { kind: 'range' };
+export type MenuAction = { kind: 'range' } | { kind: 'zombies' };
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -19,7 +19,7 @@ const CONTROLS: ReadonlyArray<readonly [string, string]> = [
   ['R', 'Reload'],
   ['B', 'Fire mode'],
   ['F', 'Buy / interact'],
-  ['1 - 7', 'Weapons'],
+  ['Q', 'Swap weapon'],
   ['ESC', 'Pause'],
 ];
 
@@ -97,6 +97,8 @@ export class MainMenu {
         'menu__button--primary',
       ),
       element('div', 'menu__hint', 'Zero your weapons on steel from 25 to 200 m.'),
+      this.button('ZOMBIES', () => this.handlers.onAction({ kind: 'zombies' }), 'menu__button--primary'),
+      element('div', 'menu__hint', 'Survive rounds through a three storey mansion. Solo.'),
     );
     this.panels.set('root', panel);
     return panel;
