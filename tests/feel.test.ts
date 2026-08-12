@@ -4,7 +4,7 @@ import { SpreadModel } from '../src/shooting/SpreadModel';
 import { SessionStats } from '../src/stats/SessionStats';
 import { createSeededRandom } from '../src/utils/Random';
 import { clamp, damp, decayToZero, lerp } from '../src/utils/math';
-import { AK47, L96, M4A1, M60, WEAPON_LOADOUT } from '../src/weapons/definitions';
+import { AK47, L96, M4A1, M60, MP5, MP7, UMP45, WEAPON_LOADOUT } from '../src/weapons/definitions';
 import type { RecoilConfig } from '../src/weapons/WeaponDefinition';
 
 function settle(recoil: RecoilSystem, config: RecoilConfig, seconds: number): void {
@@ -208,8 +208,16 @@ describe('math helpers', () => {
 });
 
 describe('weapon definitions', () => {
-  it('exposes exactly the four range weapons in slot order', () => {
-    expect(WEAPON_LOADOUT.map((weapon) => weapon.id)).toEqual(['m4a1', 'ak47', 'm60', 'l96']);
+  it('exposes every range weapon in slot order', () => {
+    expect(WEAPON_LOADOUT.map((weapon) => weapon.id)).toEqual([
+      'm4a1',
+      'ak47',
+      'm60',
+      'l96',
+      'mp5',
+      'mp7',
+      'ump45',
+    ]);
   });
 
   it('keeps every definition internally consistent', () => {
@@ -222,8 +230,12 @@ describe('weapon definitions', () => {
       expect(weapon.spread.max).toBeGreaterThan(weapon.spread.base);
       expect(weapon.ads.fov).toBeLessThan(75);
       expect(weapon.ads.sensitivityMultiplier).toBeLessThanOrEqual(1);
-      expect(weapon.projectile.velocity).toBeGreaterThan(300);
-      expect(weapon.projectile.maxDistance).toBeGreaterThanOrEqual(400);
+      expect(weapon.projectile.velocity).toBeGreaterThan(250);
+      expect(weapon.projectile.maxDistance).toBeGreaterThanOrEqual(200);
+      expect(weapon.audio.mechanical).toBeGreaterThanOrEqual(0);
+      expect(weapon.audio.mechanical).toBeLessThanOrEqual(1);
+      expect(weapon.audio.reverb).toBeGreaterThanOrEqual(0);
+      expect(weapon.audio.reverb).toBeLessThanOrEqual(1);
       expect(weapon.adsMovementMultiplier).toBeLessThanOrEqual(weapon.movementMultiplier);
     }
   });
@@ -244,6 +256,29 @@ describe('weapon definitions', () => {
     expect(AK47.fireModes).toContain('auto');
     expect(M60.fireModes).toEqual(['auto']);
     expect(L96.fireModes).toEqual(['semi']);
+  });
+
+  it('gives every weapon its own voice', () => {
+    const cracks = WEAPON_LOADOUT.map((weapon) => weapon.audio.crackFrequency);
+    const bodies = WEAPON_LOADOUT.map((weapon) => weapon.audio.bodyFrequency);
+    expect(new Set(cracks).size).toBe(WEAPON_LOADOUT.length);
+    expect(new Set(bodies).size).toBe(WEAPON_LOADOUT.length);
+    // Bigger calibres sit lower and ring out longer than the pistol rounds.
+    expect(M60.audio.bodyFrequency).toBeLessThan(MP7.audio.bodyFrequency);
+    expect(L96.audio.tailDecay).toBeGreaterThan(MP5.audio.tailDecay);
+    expect(L96.audio.reverb).toBeGreaterThan(MP7.audio.reverb);
+  });
+
+  it('gives the submachine guns their own handling niche', () => {
+    for (const smg of [MP5, MP7, UMP45]) {
+      expect(smg.ads.time).toBeLessThan(M4A1.ads.time);
+      expect(smg.recoil.vertical).toBeLessThan(AK47.recoil.vertical);
+      expect(smg.projectile.velocity).toBeLessThan(M4A1.projectile.velocity);
+    }
+    // Fastest cadence, slowest bullet, heaviest thump: three different jobs.
+    expect(MP7.rpm).toBeGreaterThan(MP5.rpm);
+    expect(UMP45.projectile.velocity).toBeLessThan(MP5.projectile.velocity);
+    expect(UMP45.recoil.vertical).toBeGreaterThan(MP5.recoil.vertical);
   });
 
   it('makes the heavy weapons slower to aim and to walk with', () => {

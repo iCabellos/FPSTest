@@ -6,6 +6,7 @@ const CONTROLS: ReadonlyArray<readonly [string, string]> = [
   ['R', 'Reload'],
   ['B', 'Toggle fire mode'],
   ['1 - 4', 'M4A1 / AK-47 / M60 / L96'],
+  ['5 - 7', 'MP5 / MP7 / UMP45'],
   ['T', 'Reset targets and stats'],
   ['ESC', 'Release pointer lock'],
 ];

@@ -19,7 +19,7 @@ import { ViewModel } from '../weapons/viewmodel/ViewModel';
 import { GameLoop } from './GameLoop';
 import { Input, MOUSE_LEFT, MOUSE_RIGHT } from './Input';
 
-const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'];
+const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'];
 const CROSSHAIR_MIN_RADIUS = 4;
 const CROSSHAIR_MAX_RADIUS = 140;
 

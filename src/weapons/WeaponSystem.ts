@@ -1,4 +1,4 @@
-import type { AudioSystem } from '../audio/AudioSystem';
+import type { AudioSystem, SoundId } from '../audio/AudioSystem';
 import { CAMERA } from '../core/constants';
 import type { CameraRig } from '../player/CameraRig';
 import { RecoilSystem } from '../shooting/RecoilSystem';
@@ -22,6 +22,16 @@ function moveTowards(current: number, target: number, maxDelta: number): number 
 }
 
 /**
+ * Sounds fired as the reload animation passes each stage, so the magazine
+ * seating and the action closing are heard when they are seen. The magazine
+ * release plays as the reload starts.
+ */
+const RELOAD_CUES: ReadonlyArray<{ at: number; id: SoundId; volume: number }> = [
+  { at: 0.7, id: 'magIn', volume: 1 },
+  { at: 0.86, id: 'charge', volume: 0.9 },
+];
+
+/**
  * Owns the loadout and everything that shapes how a weapon feels: ADS blend,
  * recoil, spread and the view model. Firing itself is delegated to the
  * shooting system.
@@ -35,6 +45,7 @@ export class WeaponSystem {
   private adsHeld = false;
   private adsFactor = 0;
   private currentSpread = 0;
+  private reloadCue = 0;
 
   constructor(private readonly deps: WeaponSystemDeps) {
     this.deps.viewModel.setWeapon(this.current.definition);
@@ -78,7 +89,9 @@ export class WeaponSystem {
   }
 
   requestReload(): void {
-    if (this.current.requestReload()) this.deps.audio.play('reload');
+    if (!this.current.requestReload()) return;
+    this.reloadCue = 0;
+    this.deps.audio.play('magOut');
   }
 
   toggleFireMode(): void {
@@ -137,9 +150,9 @@ export class WeaponSystem {
     const result = weapon.update(dt);
 
     if (result.shots > 0) this.emitShots(result.shots, weapon, moveFraction);
-    if (result.reloadFinished) this.deps.audio.play('reloadEnd');
     if (result.boltCycled) this.deps.audio.play('bolt');
     if (result.dryFired) this.deps.audio.play('dryFire');
+    this.updateReloadCues(weapon, result.reloadFinished);
 
     const scoped = this.isScoped;
     this.deps.viewModel.setVisible(!scoped);
@@ -153,6 +166,28 @@ export class WeaponSystem {
 
     // Recompute after firing so the crosshair reflects the bloom immediately.
     this.currentSpread = this.spread.compute(definition.spread, this.adsFactor, moveFraction);
+  }
+
+  private updateReloadCues(weapon: Weapon, finished: boolean): void {
+    if (finished) {
+      // A very long frame can jump past a cue; the reload still has to be heard.
+      this.playReloadCuesFrom(1);
+      this.reloadCue = 0;
+      return;
+    }
+    if (!weapon.isReloading) {
+      this.reloadCue = 0;
+      return;
+    }
+    this.playReloadCuesFrom(weapon.reloadProgress);
+  }
+
+  private playReloadCuesFrom(progress: number): void {
+    while (this.reloadCue < RELOAD_CUES.length && progress >= RELOAD_CUES[this.reloadCue].at) {
+      const cue = RELOAD_CUES[this.reloadCue];
+      this.deps.audio.play(cue.id, cue.volume);
+      this.reloadCue++;
+    }
   }
 
   private emitShots(shots: number, weapon: Weapon, moveFraction: number): void {

@@ -1,4 +1,4 @@
-export type WeaponId = 'm4a1' | 'ak47' | 'm60' | 'l96';
+export type WeaponId = 'm4a1' | 'ak47' | 'm60' | 'l96' | 'mp5' | 'mp7' | 'ump45';
 export type FireMode = 'semi' | 'auto';
 
 export interface RecoilConfig {
@@ -80,12 +80,18 @@ export interface ViewModelConfig {
 
 export interface WeaponAudioConfig {
   gain: number;
-  /** Low frequency body of the shot. */
+  /** Low frequency body of the shot: the thump you feel. */
   bodyFrequency: number;
-  /** Bandpass centre of the crack. */
+  /** Bandpass centre of the crack: the tone of the report. */
   crackFrequency: number;
+  /** Length of the crack, in seconds. */
   decay: number;
+  /** Length of the close tail, in seconds. */
   tailDecay: number;
+  /** Level of the mechanical action clack layered on top (0..1). */
+  mechanical: number;
+  /** How much of the shot feeds the range echo (0..1). */
+  reverb: number;
 }
 
 export interface WeaponDefinition {
