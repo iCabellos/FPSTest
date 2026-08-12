@@ -257,9 +257,20 @@ validated the way a host would: the barrier must exist, still be shut, and be
 affordable. Spawns only pick nodes that still have an open route to the
 player, so nothing appears behind a door it cannot walk through.
 
-**Not built yet:** co-op networking, the Pack-a-Punch machine, the remaining
-new weapons, and the slot machine special weapon with its pity counter and
-nuclear jackpot.
+### Special weapon rules
+
+`special/SlotMachine.ts` is the authoritative rule set for the slot machine
+weapon, complete and unit tested: five reels of X / GRENADE / NUCLEAR, thirty
+uses, and a pity counter. Every X does nothing, every GRENADE throws one
+grenade with the throws fanned twenty degrees apart clockwise, a lone NUCLEAR
+does nothing, and five NUCLEAR is the jackpot. A spin that is not a jackpot
+raises pity; at twenty the next spin is guaranteed, and any jackpot resets it.
+One instance owns the pity counter and the remaining uses, so two clients can
+never disagree about them.
+
+**Not built yet:** the in world machine that renders those spins and throws the
+grenades, the nuclear jackpot sequence, co-op networking, Pack-a-Punch, and the
+remaining new weapons.
 
 ## Performance
 
