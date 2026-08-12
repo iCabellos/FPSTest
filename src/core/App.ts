@@ -11,6 +11,7 @@ import { LoadoutScreen, type LoadoutKind } from '../ui/LoadoutScreen';
 import { MainMenu, type MenuAction } from '../ui/MainMenu';
 import { GameLoop } from './GameLoop';
 import { Input } from './Input';
+import { TouchControls } from './TouchControls';
 import type { GameMode, ModeContext } from './modes/GameMode';
 import { RangeMode } from './modes/RangeMode';
 import { ZombiesMode } from './modes/ZombiesMode';
@@ -26,6 +27,7 @@ export class App {
   private readonly loop: GameLoop;
   private readonly menu: MainMenu;
   private readonly loadoutScreen: LoadoutScreen;
+  private readonly touch: TouchControls | null;
   private readonly context: ModeContext;
 
   private mode: GameMode | null = null;
@@ -40,6 +42,10 @@ export class App {
 
     this.input = new Input(this.render.domElement);
     this.input.onLockChange = (locked) => this.handleLockChange(locked);
+
+    // Thumb sticks only exist on touchscreens; a desktop never sees them.
+    this.touch = TouchControls.isTouchDevice() ? new TouchControls(container) : null;
+    this.input.attachTouch(this.touch?.state ?? null);
 
     this.loop = new GameLoop((dt) => this.frame(dt));
 
@@ -77,6 +83,7 @@ export class App {
     this.unloadMode();
     this.menu.dispose();
     this.loadoutScreen.dispose();
+    this.touch?.dispose();
     this.input.dispose();
     this.audio.dispose();
     disposeGeneratedTextures();
@@ -118,6 +125,8 @@ export class App {
 
   private exitToMenu(): void {
     document.exitPointerLock();
+    this.touch?.setVisible(false);
+    this.paused = true;
     this.unloadMode();
     this.loadoutScreen.close();
     this.menu.openRoot();
@@ -126,10 +135,18 @@ export class App {
   private requestLock(): void {
     if (!this.mode) return;
     this.menu.close();
+    if (this.touch) {
+      // Touch play has no pointer to lock: the sticks are the controls.
+      this.touch.setVisible(true);
+      this.paused = false;
+      this.mode.setActive(true);
+      return;
+    }
     this.input.requestPointerLock();
   }
 
   private handleLockChange(locked: boolean): void {
+    if (this.touch) return;
     this.paused = !locked;
     this.mode?.setActive(locked);
     if (locked) {
@@ -142,8 +159,12 @@ export class App {
   }
 
   private frame(dt: number): void {
-    if (this.mode && !this.paused) this.mode.update(dt);
+    if (this.mode && !this.paused) {
+      this.touch?.update(dt);
+      this.mode.update(dt);
+    }
     this.render.render(this.mode !== null);
     this.input.endFrame();
+    this.touch?.endFrame();
   }
 }

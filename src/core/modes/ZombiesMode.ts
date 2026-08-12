@@ -13,7 +13,6 @@ import { WeaponSystem } from '../../weapons/WeaponSystem';
 import { ViewModel } from '../../weapons/viewmodel/ViewModel';
 import { ZombieManager, type ZombieTarget } from '../../zombies/ZombieManager';
 import { ZombieScanner } from '../../zombies/ZombieScanner';
-import { MOUSE_LEFT, MOUSE_RIGHT } from '../Input';
 import type { GameMode, ModeContext } from './GameMode';
 
 const START_POINTS = 500;
@@ -28,6 +27,11 @@ const BANNER_TIME = 2.6;
 
 const tmpForward = new THREE.Vector3();
 const tmpToBarrier = new THREE.Vector3();
+const tmpAimPoint = new THREE.Vector3();
+const tmpEye = new THREE.Vector3();
+/** How hard touch aim assist pulls onto a walker. */
+const AIM_ASSIST_STRENGTH = 7;
+const AIM_ASSIST_RANGE = 45;
 
 /**
  * Zombies survival. Owns the mansion, the horde, the round clock and the
@@ -147,15 +151,16 @@ export class ZombiesMode implements GameMode {
     if (input.wasKeyPressed('KeyB')) this.weapons.toggleFireMode();
     if (input.wasKeyPressed('KeyF')) this.tryPurchase();
 
-    this.weapons.setTrigger(input.isButtonDown(MOUSE_LEFT));
-    this.weapons.setAds(input.isButtonDown(MOUSE_RIGHT));
+    this.weapons.setTrigger(input.isFiring);
+    this.weapons.setAds(input.isAiming);
 
     const lookX = input.lookDeltaX;
     const lookY = input.lookDeltaY;
     this.cameraRig.applyLook(lookX, lookY, this.weapons.lookSensitivity);
+    if (input.wantsAimAssist) this.applyAimAssist(dt);
 
-    this.intent.forward = (input.isKeyDown('KeyW') ? 1 : 0) - (input.isKeyDown('KeyS') ? 1 : 0);
-    this.intent.right = (input.isKeyDown('KeyD') ? 1 : 0) - (input.isKeyDown('KeyA') ? 1 : 0);
+    this.intent.forward = input.moveForward;
+    this.intent.right = input.moveRight;
     this.player.update(dt, this.intent, this.cameraRig.yaw, this.weapons.movementMultiplier);
 
     const moveFraction = this.player.speedFraction;
@@ -206,6 +211,36 @@ export class ZombiesMode implements GameMode {
     }
     this.hud.flashHit();
     return true;
+  }
+
+  /**
+   * Touch aim assist: pull onto the closest walker in front of the player so a
+   * thumb does not have to track a moving target.
+   */
+  private applyAimAssist(dt: number): void {
+    tmpEye.set(this.player.position.x, this.player.eyeHeight, this.player.position.z);
+    this.context.render.camera.getWorldDirection(tmpForward);
+
+    let best: THREE.Vector3 | null = null;
+    let bestScore = -Infinity;
+    this.zombies.forEachAlive((zombie) => {
+      tmpAimPoint.copy(zombie.position);
+      tmpAimPoint.y += 1.2;
+      tmpToBarrier.subVectors(tmpAimPoint, tmpEye);
+      const distance = tmpToBarrier.length();
+      if (distance > AIM_ASSIST_RANGE || distance < 0.5) return;
+      tmpToBarrier.divideScalar(distance);
+      const facing = tmpToBarrier.dot(tmpForward);
+      // Only assist toward things roughly ahead, nearest first.
+      if (facing < 0.2) return;
+      const score = facing * 2 - distance / AIM_ASSIST_RANGE;
+      if (score > bestScore) {
+        bestScore = score;
+        best = tmpAimPoint.clone();
+      }
+    });
+
+    if (best) this.cameraRig.aimAt(best, tmpEye, dt, AIM_ASSIST_STRENGTH);
   }
 
   private takeDamage(damage: number): void {
