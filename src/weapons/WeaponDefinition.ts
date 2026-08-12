@@ -1,4 +1,13 @@
-export type WeaponId = 'm4a1' | 'ak47' | 'm60' | 'l96' | 'mp5' | 'mp7' | 'ump45';
+export type WeaponId =
+  | 'm4a1'
+  | 'ak47'
+  | 'm60'
+  | 'l96'
+  | 'mp5'
+  | 'mp7'
+  | 'ump45'
+  | 'm9'
+  | 'm1911';
 export type FireMode = 'semi' | 'auto';
 
 export interface RecoilConfig {

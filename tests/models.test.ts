@@ -6,12 +6,12 @@ import {
   disposeWeaponMaterials,
   type WeaponModel,
 } from '../src/weapons/viewmodel/WeaponModelFactory';
-import { WEAPON_LOADOUT } from '../src/weapons/definitions';
+import { ALL_WEAPONS } from '../src/weapons/definitions';
 import type { WeaponId } from '../src/weapons/WeaponDefinition';
 
 const materials = createWeaponMaterials();
 const models = new Map<WeaponId, WeaponModel>(
-  WEAPON_LOADOUT.map((weapon) => [weapon.id, createWeaponModel(weapon.id, materials)]),
+  ALL_WEAPONS.map((weapon) => [weapon.id, createWeaponModel(weapon.id, materials)]),
 );
 
 function countMeshes(model: WeaponModel): number {
@@ -24,7 +24,7 @@ function countMeshes(model: WeaponModel): number {
 
 describe('weapon models', () => {
   it('builds a model for every weapon in the loadout', () => {
-    expect(models.size).toBe(WEAPON_LOADOUT.length);
+    expect(models.size).toBe(ALL_WEAPONS.length);
     for (const model of models.values()) expect(model.group.children.length).toBeGreaterThan(0);
   });
 
@@ -53,7 +53,8 @@ describe('weapon models', () => {
 
   it('points the muzzle forward, clear of the receiver', () => {
     for (const [id, model] of models) {
-      expect(model.muzzle.position.z, id).toBeLessThan(-0.25);
+      // Sidearms are short; everything still points well past the grip.
+      expect(model.muzzle.position.z, id).toBeLessThan(-0.15);
       expect(Math.abs(model.muzzle.position.x), id).toBeLessThan(0.01);
       // The muzzle has to sit on the bore line or the tracer leaves crooked.
       expect(Math.abs(model.muzzle.position.y), id).toBeLessThan(0.03);
@@ -84,11 +85,28 @@ describe('weapon models', () => {
       bounds.setFromObject(model.group);
       const size = bounds.getSize(new THREE.Vector3());
       // Roughly weapon sized: nothing stretched or collapsed by a bad transform.
-      expect(size.z, id).toBeGreaterThan(0.3);
+      expect(size.z, id).toBeGreaterThan(0.2);
       expect(size.z, id).toBeLessThan(1.4);
       expect(size.y, id).toBeLessThan(0.6);
       expect(size.x, id).toBeLessThan(0.35);
     }
+  });
+
+  it('keeps the sidearms clearly shorter than the shoulder weapons', () => {
+    const length = (id: WeaponId): number => {
+      const bounds = new THREE.Box3().setFromObject(models.get(id)!.group);
+      return bounds.getSize(new THREE.Vector3()).z;
+    };
+    for (const pistol of ['m9', 'm1911'] as const) {
+      expect(length(pistol), pistol).toBeLessThan(length('mp7'));
+    }
+  });
+
+  it('gives the two sidearms different proportions', () => {
+    const m9 = models.get('m9')!;
+    const m1911 = models.get('m1911')!;
+    expect(m9.sight.position.y).not.toBe(m1911.sight.position.y);
+    expect(m9.muzzle.position.z).not.toBe(m1911.muzzle.position.z);
   });
 
   it('makes the submachine guns shorter than the rifles', () => {

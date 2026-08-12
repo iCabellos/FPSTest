@@ -4,7 +4,7 @@ import { SpreadModel } from '../src/shooting/SpreadModel';
 import { SessionStats } from '../src/stats/SessionStats';
 import { createSeededRandom } from '../src/utils/Random';
 import { clamp, damp, decayToZero, lerp } from '../src/utils/math';
-import { AK47, L96, M4A1, M60, MP5, MP7, UMP45, WEAPON_LOADOUT } from '../src/weapons/definitions';
+import { AK47, L96, M4A1, M60, MP5, MP7, UMP45, ALL_WEAPONS } from '../src/weapons/definitions';
 import type { RecoilConfig } from '../src/weapons/WeaponDefinition';
 
 function settle(recoil: RecoilSystem, config: RecoilConfig, seconds: number): void {
@@ -208,8 +208,8 @@ describe('math helpers', () => {
 });
 
 describe('weapon definitions', () => {
-  it('exposes every range weapon in slot order', () => {
-    expect(WEAPON_LOADOUT.map((weapon) => weapon.id)).toEqual([
+  it('exposes every weapon the game knows about', () => {
+    expect(ALL_WEAPONS.map((weapon) => weapon.id)).toEqual([
       'm4a1',
       'ak47',
       'm60',
@@ -217,11 +217,13 @@ describe('weapon definitions', () => {
       'mp5',
       'mp7',
       'ump45',
+      'm9',
+      'm1911',
     ]);
   });
 
   it('keeps every definition internally consistent', () => {
-    for (const weapon of WEAPON_LOADOUT) {
+    for (const weapon of ALL_WEAPONS) {
       expect(weapon.rpm).toBeGreaterThan(0);
       expect(weapon.magazineSize).toBeGreaterThan(0);
       expect(weapon.reloadTime).toBeGreaterThan(0);
@@ -232,6 +234,7 @@ describe('weapon definitions', () => {
       expect(weapon.ads.sensitivityMultiplier).toBeLessThanOrEqual(1);
       expect(weapon.projectile.velocity).toBeGreaterThan(250);
       expect(weapon.projectile.maxDistance).toBeGreaterThanOrEqual(200);
+      expect(weapon.magazineSize).toBeGreaterThanOrEqual(7);
       expect(weapon.audio.mechanical).toBeGreaterThanOrEqual(0);
       expect(weapon.audio.mechanical).toBeLessThanOrEqual(1);
       expect(weapon.audio.reverb).toBeGreaterThanOrEqual(0);
@@ -259,10 +262,10 @@ describe('weapon definitions', () => {
   });
 
   it('gives every weapon its own voice', () => {
-    const cracks = WEAPON_LOADOUT.map((weapon) => weapon.audio.crackFrequency);
-    const bodies = WEAPON_LOADOUT.map((weapon) => weapon.audio.bodyFrequency);
-    expect(new Set(cracks).size).toBe(WEAPON_LOADOUT.length);
-    expect(new Set(bodies).size).toBe(WEAPON_LOADOUT.length);
+    const cracks = ALL_WEAPONS.map((weapon) => weapon.audio.crackFrequency);
+    const bodies = ALL_WEAPONS.map((weapon) => weapon.audio.bodyFrequency);
+    expect(new Set(cracks).size).toBe(ALL_WEAPONS.length);
+    expect(new Set(bodies).size).toBe(ALL_WEAPONS.length);
     // Bigger calibres sit lower and ring out longer than the pistol rounds.
     expect(M60.audio.bodyFrequency).toBeLessThan(MP7.audio.bodyFrequency);
     expect(L96.audio.tailDecay).toBeGreaterThan(MP5.audio.tailDecay);

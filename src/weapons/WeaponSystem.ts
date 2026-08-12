@@ -5,7 +5,7 @@ import { RecoilSystem } from '../shooting/RecoilSystem';
 import type { ShootingSystem } from '../shooting/ShootingSystem';
 import { SpreadModel } from '../shooting/SpreadModel';
 import { lerp } from '../utils/math';
-import { WEAPON_LOADOUT } from './definitions';
+import type { WeaponDefinition } from './WeaponDefinition';
 import { Weapon } from './Weapon';
 import type { ViewModel } from './viewmodel/ViewModel';
 
@@ -14,6 +14,8 @@ export interface WeaponSystemDeps {
   viewModel: ViewModel;
   shooting: ShootingSystem;
   audio: AudioSystem;
+  /** The weapons carried into this match, in slot order. */
+  loadout: readonly WeaponDefinition[];
 }
 
 function moveTowards(current: number, target: number, maxDelta: number): number {
@@ -37,7 +39,7 @@ const RELOAD_CUES: ReadonlyArray<{ at: number; id: SoundId; volume: number }> = 
  * shooting system.
  */
 export class WeaponSystem {
-  private readonly weapons: Weapon[] = WEAPON_LOADOUT.map((definition) => new Weapon(definition));
+  private readonly weapons: Weapon[];
   private readonly recoil = new RecoilSystem();
   private readonly spread = new SpreadModel();
 
@@ -48,6 +50,7 @@ export class WeaponSystem {
   private reloadCue = 0;
 
   constructor(private readonly deps: WeaponSystemDeps) {
+    this.weapons = deps.loadout.map((definition) => new Weapon(definition));
     this.deps.viewModel.setWeapon(this.current.definition);
     this.current.onEquip();
   }
@@ -96,6 +99,16 @@ export class WeaponSystem {
 
   toggleFireMode(): void {
     if (this.current.toggleFireMode()) this.deps.audio.play('switch', 0.7);
+  }
+
+  get slotCount(): number {
+    return this.weapons.length;
+  }
+
+  /** Cycles to the next carried weapon. Used by the swap key and by touch. */
+  swap(): void {
+    if (this.weapons.length < 2) return;
+    this.selectSlot((this.index + 1) % this.weapons.length);
   }
 
   selectSlot(slot: number): void {

@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { AudioSystem } from '../../audio/AudioSystem';
 import type { RenderContext } from '../../rendering/RenderContext';
+import type { Loadout } from '../../loadout/loadout';
 import type { Input } from '../Input';
 
 export type GameModeId = 'range' | 'zombies';
@@ -16,6 +17,8 @@ export interface ModeContext {
   fps: () => number;
   /** Hands control back to the menu. */
   exitToMenu: () => void;
+  /** Weapons chosen on the loadout screen before the match started. */
+  loadout: Loadout;
 }
 
 /**
