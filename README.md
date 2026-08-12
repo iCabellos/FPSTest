@@ -16,8 +16,22 @@ every number is tuned for feel, not copied from ballistic tables.
 
 ## Modes
 
-Launching the game shows a mode menu. `SHOOTING RANGE` is fully playable.
+Launching the game shows a mode menu, then a **loadout screen** before the
+match. The range lets you carry a primary and a sidearm; zombies only lets you
+choose the pistol you open with, since the rest of the arsenal is earned inside
+the mansion. Weapons are not bound to the number keys — you carry two and swap
+with `Q`.
+
 Losing pointer lock pauses whichever mode is loaded and offers resume or quit.
+
+### Mobile
+
+On a touchscreen the game mounts two thumb sticks and skips pointer lock
+entirely; a desktop never sees them. The left stick moves and stays invisible
+until a thumb lands on it, appearing wherever you press. The right stick aims:
+it locks onto the nearest walker ahead the moment you press it, opens fire
+half a second later, and if you keep dragging it also swings the camera, at a
+lower sensitivity than a mouse so steering and aiming do not fight.
 
 ## Tech stack
 
@@ -65,9 +79,9 @@ Pick a mode from the menu to lock the pointer and start shooting.
 | `RMB`   | Aim down sights (hold)            |
 | `R`     | Reload                            |
 | `B`     | Toggle fire mode (where available)|
-| `1-4`   | M4A1 / AK-47 / M60 / L96A1        |
-| `5-7`   | MP5 / MP7 / UMP45                 |
-| `T`     | Reset targets and statistics      |
+| `Q`     | Swap to your other weapon         |
+| `F`     | Buy the barrier you are facing (zombies) |
+| `T`     | Reset targets and statistics (range) |
 | `ESC`   | Pause (releases pointer lock)     |
 
 ## Architecture
@@ -235,10 +249,17 @@ here is mistaken for a finished feature.
   falls, lands and walks up ramps on multi storey maps. The range passes none
   and behaves exactly as before.
 
-**Not built yet:** the mode that wires these together, co-op networking, the
-Pack-a-Punch machine, the ten additional weapons, and the slot machine special
-weapon with its pity and nuclear jackpot. The mode menu deliberately does not
-offer Zombies until it is playable, rather than showing a dead button.
+**Playable now.** `ZOMBIES` runs solo end to end: pick a pistol, spawn in the
+entry hall, survive rounds, earn points for hits and kills, and buy your way
+deeper into the mansion. Points, health with delayed regeneration, melee
+damage, barrier purchase and the round banner are all live. Purchases are
+validated the way a host would: the barrier must exist, still be shut, and be
+affordable. Spawns only pick nodes that still have an open route to the
+player, so nothing appears behind a door it cannot walk through.
+
+**Not built yet:** co-op networking, the Pack-a-Punch machine, the remaining
+new weapons, and the slot machine special weapon with its pity counter and
+nuclear jackpot.
 
 ## Performance
 

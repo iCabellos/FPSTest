@@ -14,7 +14,6 @@ import { clamp, DEG2RAD } from '../../utils/math';
 import { WeaponSystem } from '../../weapons/WeaponSystem';
 import { ViewModel } from '../../weapons/viewmodel/ViewModel';
 import { resolveLoadout } from '../../loadout/loadout';
-import { MOUSE_LEFT, MOUSE_RIGHT } from '../Input';
 import type { GameMode, ModeContext } from './GameMode';
 
 const CROSSHAIR_MIN_RADIUS = 4;
@@ -124,15 +123,15 @@ export class RangeMode implements GameMode {
 
     this.handleActionKeys();
 
-    this.weapons.setTrigger(input.isButtonDown(MOUSE_LEFT));
-    this.weapons.setAds(input.isButtonDown(MOUSE_RIGHT));
+    this.weapons.setTrigger(input.isFiring);
+    this.weapons.setAds(input.isAiming);
 
     const lookX = input.lookDeltaX;
     const lookY = input.lookDeltaY;
     this.cameraRig.applyLook(lookX, lookY, this.weapons.lookSensitivity);
 
-    this.intent.forward = (input.isKeyDown('KeyW') ? 1 : 0) - (input.isKeyDown('KeyS') ? 1 : 0);
-    this.intent.right = (input.isKeyDown('KeyD') ? 1 : 0) - (input.isKeyDown('KeyA') ? 1 : 0);
+    this.intent.forward = input.moveForward;
+    this.intent.right = input.moveRight;
     this.player.update(dt, this.intent, this.cameraRig.yaw, this.weapons.movementMultiplier);
 
     const moveFraction = this.player.speedFraction;
