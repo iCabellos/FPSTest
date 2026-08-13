@@ -696,6 +696,63 @@ function buildM1911(m: WeaponMaterials): WeaponModel {
   });
 }
 
+/**
+ * The special weapon: a fruit machine someone welded a barrel to. Five reel
+ * windows sit across the top deck where the player can read them, the payout
+ * horn replaces a muzzle brake, and the arm on the right is the "trigger" you
+ * see slam down on every pull.
+ *
+ * The reel windows are returned in order so the mode can light them as the
+ * spin resolves; they are the only moving readout the weapon has.
+ */
+function buildSlotMachine(m: WeaponMaterials): WeaponModel {
+  const sightY = 0.078;
+  const lever = group(
+    [
+      post(m.metal, 0.008, 0.12, [0, 0.06, 0]),
+      ball(m.rubber, 0.022, [0, 0.13, 0]),
+    ],
+    [0.075, 0.03, 0.06],
+  );
+
+  const reels: THREE.Object3D[] = [];
+  for (let i = 0; i < 5; i++) {
+    // Evenly spaced across the deck rather than placed by hand.
+    const x = -0.052 + i * 0.026;
+    reels.push(box(m.glass, [0.02, 0.026, 0.03], [x, 0.058, -0.06]));
+    reels.push(box(m.darkMetal, [0.024, 0.004, 0.034], [x, 0.043, -0.06]));
+  }
+
+  const parts: THREE.Object3D[] = [
+    // Cast cabinet body, with a brass face plate.
+    box(m.darkMetal, [0.15, 0.13, 0.3], [0, 0.005, -0.06]),
+    box(m.wood, [0.158, 0.05, 0.06], [0, 0.02, 0.08]),
+    box(m.metal, [0.14, 0.09, 0.012], [0, 0.0, -0.208]),
+    // Top deck the reels are set into.
+    box(m.metal, [0.144, 0.014, 0.09], [0, 0.04, -0.06]),
+    ...reels,
+    // Coin tray under the nose, and the payout horn that grenades leave from.
+    box(m.metal, [0.1, 0.026, 0.05], [0, -0.062, -0.16]),
+    tube(m.metal, 0.05, 0.026, 0.14, [0, -0.005, -0.29], 12),
+    ring(m.metal, 0.052, 0.006, [0, -0.005, -0.355], 14),
+    // Handled like a heavy shoulder gun despite the shape.
+    box(m.wood, [0.05, 0.06, 0.12], [0, -0.01, 0.16]),
+    ...gripAssembly(m, m.wood, 0.06, 0.24, 0.1),
+    ...notchRearSight(m, 0.07, sightY, 0.072, 0.013),
+    ...hoodedFrontPost(m, -0.23, sightY, 0.062, 0.014, true),
+    lever,
+  ];
+
+  return assemble(parts, {
+    muzzle: anchor([0, -0.005, -0.36]),
+    // Coins drop out of the right hand tray, same side as every ejector.
+    ejectionPort: anchor([0.052, 0.004, -0.16]),
+    sight: anchor([0, sightY, 0.07]),
+    // No magazine: the reels are the magazine, and it never gets reloaded.
+    bolt: lever,
+  });
+}
+
 const BUILDERS: Record<WeaponId, (materials: WeaponMaterials) => WeaponModel> = {
   m4a1: buildM4A1,
   ak47: buildAK47,
@@ -706,6 +763,7 @@ const BUILDERS: Record<WeaponId, (materials: WeaponMaterials) => WeaponModel> = 
   ump45: buildUMP45,
   m9: buildM9,
   m1911: buildM1911,
+  slotmachine: buildSlotMachine,
 };
 
 export function createWeaponModel(id: WeaponId, materials: WeaponMaterials): WeaponModel {

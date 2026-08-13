@@ -86,6 +86,8 @@ export class RangeMode implements GameMode {
       shooting: this.shooting,
       audio: context.audio,
       loadout: resolveLoadout(context.loadout),
+      // A range hands out ammo; the limit belongs to the mansion, not here.
+      infiniteReserve: true,
     });
 
     this.hud = new Hud(context.container);

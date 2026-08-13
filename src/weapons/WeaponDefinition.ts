@@ -7,7 +7,8 @@ export type WeaponId =
   | 'mp7'
   | 'ump45'
   | 'm9'
-  | 'm1911';
+  | 'm1911'
+  | 'slotmachine';
 export type FireMode = 'semi' | 'auto';
 
 export interface RecoilConfig {
@@ -110,6 +111,12 @@ export interface WeaponDefinition {
   fireModes: readonly FireMode[];
   rpm: number;
   magazineSize: number;
+  /**
+   * Spare rounds carried outside the magazine. The shooting range ignores it
+   * and reloads for free; zombies treats it as the real limit, which is what
+   * makes the ammo boxes on the mansion walls worth buying.
+   */
+  reserveAmmo: number;
   reloadTime: number;
   equipTime: number;
   /** Present on bolt action weapons; blocks firing after each shot. */

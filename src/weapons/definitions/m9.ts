@@ -11,6 +11,7 @@ export const M9: WeaponDefinition = {
   fireModes: ['semi'],
   rpm: 450,
   magazineSize: 17,
+  reserveAmmo: 102,
   reloadTime: 2.1,
   equipTime: 0.35,
   recoil: {

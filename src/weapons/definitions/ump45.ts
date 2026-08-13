@@ -11,6 +11,7 @@ export const UMP45: WeaponDefinition = {
   fireModes: ['auto', 'semi'],
   rpm: 600,
   magazineSize: 25,
+  reserveAmmo: 200,
   reloadTime: 2.9,
   equipTime: 0.6,
   recoil: {

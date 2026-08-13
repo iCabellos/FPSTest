@@ -97,7 +97,7 @@ the same build that ships.
 | `R`     | Reload                            |
 | `B`     | Toggle fire mode (where available)|
 | `Q`     | Swap to your other weapon         |
-| `F`     | Buy the barrier you are facing (zombies) |
+| `F`     | Buy / take whatever you are stood at: door, wall buy, ammo, mystery box (zombies) |
 | `T`     | Reset targets and statistics (range) |
 | `ESC`   | Pause (releases pointer lock)     |
 
@@ -237,63 +237,126 @@ ADS blend passes the scope threshold. There is no second scene and no render tar
 
 ## Zombies mode
 
-Under construction. This section states exactly what exists today so nothing
-here is mistaken for a finished feature.
+Solo, playable end to end. Pick a pistol on the loadout screen, spawn in the
+foyer, and hold the mansion for as long as you can.
 
-**Built and unit tested:**
+### The mansion
 
-- **Mansion map** (`map/layout.ts`, `map/Mansion.ts`) — one flat, fully
-  enclosed storey generated from a declarative floor plan. The plan is the
-  single source of truth: geometry, player collision and the navigation graph
-  are all derived from it, so a wall always blocks what it looks like it
-  blocks and a navigation edge always follows a real opening. Doorways are cut
-  out of wall runs rather than placed by hand. Eight rooms — foyer, great hall,
-  kitchen, library, dining room, study, gallery and vault — laid out with loops
-  so you can always circle back rather than being funnelled down a corridor.
-  Each room has its own flooring, and the wall and floor textures carry the
-  outbreak: damp running from the ceiling, panelling, grime and dried blood.
-- **Paid barriers** (`map/Barrier.ts`) — doors, double doors and debris piles
-  with escalating costs from $750 to $2500. A closed barrier blocks bullets,
-  movement *and* navigation; opening one animates and is permanent.
-- **Navigation** (`map/NavGraph.ts`) — a waypoint graph rather than a grid, so
-  three floors and stairs stay cheap. A doorway is a single gated edge, so a
-  closed barrier genuinely removes the route instead of relying on collision.
-  Pathfinding reuses preallocated scratch buffers.
-- **Zombies** (`zombies/`) — a fixed pool with idle / chase / attack / hurt /
-  dead states, target selection, melee on a cooldown, and a segment-intersect
-  query for hit detection. The whole crowd renders as four `InstancedMesh`
-  layers (torso, head, two arms), so hundreds of walkers cost four draw calls
-  and nothing is created or destroyed while playing.
-- **Rounds** (`rounds/RoundManager.ts`) — authoritative round state with the
-  strict rule that a round is finished only once every zombie belonging to it
-  has both spawned *and* died. Clearing the map is not enough while walkers are
-  still queued. Budgets grow per round and per player, with a live cap.
-- **Vertical movement** — `Player` takes an optional `GroundSampler` for maps
-  that need it. The mansion is flat and sealed, so it passes none and is
-  contained by real walls instead of an invisible box.
+`map/layout.ts` is the declarative floor plan and the single source of truth:
+geometry, player collision, the navigation graph, the window openings and every
+purchase point are all derived from it. A wall always blocks what it looks like
+it blocks, and a navigation edge always follows a real opening. Doorways and
+windows are *cut* out of wall runs rather than placed by hand.
 
-**Playable now.** `ZOMBIES` runs solo end to end: pick a pistol, spawn in the
-entry hall, survive rounds, earn points for hits and kills, and buy your way
-deeper into the mansion. Points, health with delayed regeneration, melee
-damage, barrier purchase and the round banner are all live. Purchases are
-validated the way a host would: the barrier must exist, still be shut, and be
-affordable. Spawns only pick nodes that still have an open route to the
-player, so nothing appears behind a door it cannot walk through.
+Eight rooms — foyer, great hall, kitchen, library, dining room, study, gallery
+and vault — laid out with loops so you can circle back rather than being
+funnelled down a corridor. Each room has its own flooring, and the wall and
+floor textures carry the outbreak: damp running from the ceiling, panelling,
+grime and dried blood.
 
-### Special weapon rules
+### Coming in through the windows
 
-`special/SlotMachine.ts` is the authoritative rule set for the slot machine
-weapon, complete and unit tested: five reels of X / GRENADE / NUCLEAR, thirty
-uses, and a pity counter. Every X does nothing, every GRENADE throws one
-grenade with the throws fanned twenty degrees apart clockwise, a lone NUCLEAR
-does nothing, and five NUCLEAR is the jackpot. A spin that is not a jackpot
-raises pity; at twenty the next spin is guaranteed, and any jackpot resets it.
-One instance owns the pity counter and the remaining uses, so two clients can
-never disagree about them.
+Zombies never spawn inside the building. They appear on the lawn, walk around
+the outside, stop at a boarded window, pull the planks off one at a time, and
+climb over the sill.
 
-**Not built yet:** the in world machine that renders those spins and throws the
-grenades, the nuclear jackpot sequence, co-op networking, Pack-a-Punch, and the
-remaining new weapons.
+This is a property of the map rather than of any behaviour written on top of
+it. The only navigation edges that cross the outer shell are the window ones,
+and they are **one way**: a walker climbs in and stays in, so a route can never
+treat the house as a shortcut between two points on the lawn. Each window leaves
+a solid sill below it and a solid header above it, so the opening is see-through
+and shoot-through while the sill still stops the player walking out.
+
+The placement decides the whole difficulty curve. The free starting area only
+touches the outside along the foyer's front wall, so round one always comes
+through those two windows. Buying a door opens that wing's windows as new lanes
+at the same time as it opens the route — the map gets harder as it gets bigger.
+A spawn point is only used when an open route from it to the player exists, so
+a sealed wing stays quiet until you pay for it.
+
+### Hitboxes
+
+Two volumes per walker, both matching what is actually drawn: a sphere on the
+head and a standing cylinder for the body. The head is tested first and wins
+ties, so a round that clips both counts as the headshot you were aiming for.
+A headshot does 2.5× damage and pays double.
+
+### Buying things
+
+Everything is bought with `F`, and one query decides what you are stood at, so
+the prompt and the purchase can never disagree.
+
+- **Doors and debris** (`map/Barrier.ts`) — $750 to $2000. A closed barrier
+  blocks bullets, movement *and* navigation; opening one is permanent.
+- **Wall buys** (`map/WallBuy.ts`) — chalked boards with the weapon hanging in
+  front of them, from the $500 M1911 in the foyer to the $2600 M60 in the
+  gallery. Buying one you already carry tops it up at the cheaper ammo price.
+- **Ammo boxes** — five of them: great hall, kitchen, library, gallery and
+  vault. $650 restocks whatever is in your hands.
+- **The mystery box** (`zombies/MysteryBox.ts`) — $950. It lands in a random
+  room each match, never in the free starting area. The lid opens, guns flick
+  past, and it settles on one. Take it with `F`, or it is handed over anyway
+  when the offer times out — you are never charged for nothing.
+
+You carry two weapons. Buying a third replaces the one in your hands, which is
+what makes choosing what to hold at the box matter.
+
+### Ammunition
+
+Ammo is limited. Every weapon has a magazine and a reserve behind it, and a
+reload draws from the reserve — including a partial reload when the reserve is
+nearly gone, so you get what is left rather than a full magazine. Once it is
+empty it stays empty until you buy a restock. The shooting range passes
+`infiniteReserve` and is unaffected.
+
+### The special weapon
+
+`ONE ARMED BANDIT` hangs on the vault wall for $4000 — the last room, behind
+every other purchase, and the most expensive thing in the mansion.
+
+It fires no bullets at all. Every pull spins five reels and the reels decide
+what happens. `special/SlotMachine.ts` owns the rules: every X does nothing,
+every GRENADE throws one grenade with the throws fanned twenty degrees apart
+clockwise, a lone NUCLEAR does nothing, and five NUCLEAR is the jackpot. Thirty
+uses, no reserve — when it is dry it is dry until you buy it again.
+
+The result is not HUD text. It is projected into the world as laser strokes
+(`special/LaserReadout.ts`) on whatever the weapon is pointing at: five symbol
+glyphs across the top, and a bar of twenty ticks underneath showing how close
+the guaranteed jackpot is. A spin that is not a jackpot raises pity; at twenty
+the next spin cannot lose, and any jackpot resets it.
+
+Grenades (`special/GrenadeSwarm.ts`) are pooled, drawn as one instanced mesh
+and integrated by hand — a point with a velocity, a gravity term and one floor
+bounce, which is all a 1.5 second flight needs. They do 320 damage falling off
+to nothing at 5.5 m.
+
+The jackpot (`special/NukeSequence.ts`) pulls the camera straight up, drops a
+bomb on the mansion, and kills everything belonging to the **current round**
+only, paying 400 points. It runs as an explicit phase machine that owns the
+camera outright while it plays, so there is never a frame where two things are
+both trying to place it.
+
+### Rounds and economy
+
+`rounds/RoundManager.ts` holds the strict rule that a round is finished only
+once every zombie belonging to it has both spawned *and* died — clearing the
+map is not enough while walkers are still queued. Budgets grow per round and
+per player, with a live cap.
+
+You start on 500 points: 10 a hit, 20 a headshot, 60 a kill, 100 a headshot
+kill. Health regenerates after 4.5 seconds without damage. Purchases are
+validated the way a host would validate them: the thing must exist, still be
+available, and be affordable.
+
+### Zombies rendering
+
+The whole crowd renders as four `InstancedMesh` layers (torso, head, two arms),
+so hundreds of walkers cost four draw calls and nothing is created or destroyed
+while playing.
+
+**Not built yet:** co-op networking, Pack-a-Punch, and the Desert Eagle,
+revolver, Uzi, SCAR-L, G36, FAL, Remington 870 and SPAS-12.
 
 ## Performance
 
@@ -378,6 +441,20 @@ lifecycle — spawn gating, the live cap, the "not finished while walkers are
 queued" rule, intermission, round advance, and early completion leaving no
 pending spawns.
 
+For the mansion: doorway and window cutting (including that a window removes
+exactly its own area and always leaves the sill solid), that every window is in
+the outer shell and opens onto the room it claims, and that no wall buy is
+mounted across a doorway or a window — the layout is checked, not eyeballed.
+
+The chase loop is simulated headlessly rather than assumed. `tests/siege.test.ts`
+builds the real navigation graph, spawns a walker on the lawn and steps it at a
+fixed rate: it has to walk round the house, stop at a window, pull off all four
+planks, climb over the sill without floating on the approach or clipping through
+the wall under it, end up inside, and land a melee hit. A whole wave is run the
+same way from every corner of the lawn. Two real bugs were found and fixed this
+way — walkers ping-ponging because repathing re-anchored on the node behind them,
+and routes cutting through the building by hopping in one window and out another.
+
 ## Known limitations
 
 - Target shadows are baked with the rest of the scene, so a plate's shadow does not
@@ -388,3 +465,7 @@ pending spawns.
   ricochet.
 - No wind, no spin drift, no zeroing adjustment: drop is the only external factor.
 - The weapon models are recognisable placeholders, not art.
+- Boarded windows cannot be repaired. A plank that comes off is off for good,
+  so a window is a delay rather than a renewable defence.
+- The zombies mode is solo. There is no networking of any kind, and the menu
+  does not offer co-op rather than showing a dead button.

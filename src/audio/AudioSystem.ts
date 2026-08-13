@@ -7,7 +7,9 @@ export type SoundId =
   | 'bolt'
   | 'dryFire'
   | 'impact'
-  | 'switch';
+  | 'switch'
+  | 'explosion'
+  | 'boardTear';
 
 const NOISE_SECONDS = 1;
 /** Length of the generated range impulse response, in seconds. */
@@ -349,4 +351,8 @@ const CLICK_PRESETS: Record<SoundId, ClickPreset> = {
   dryFire: { frequency: 4200, q: 3, gain: 0.22, decay: 0.05, rate: 1.2, thump: 0, reverb: 0.1 },
   impact: { frequency: 5200, q: 1.6, gain: 0.2, decay: 0.07, rate: 1.3, thump: 0, reverb: 0.5 },
   switch: { frequency: 1800, q: 1.4, gain: 0.2, decay: 0.1, rate: 1, thump: 0, reverb: 0.15 },
+  // Long, low and heavily reverberant: the grenade and the nuke.
+  explosion: { frequency: 220, q: 0.7, gain: 0.85, decay: 0.9, rate: 0.6, thump: 48, reverb: 1 },
+  // A dry splintering crack as a plank comes off a window.
+  boardTear: { frequency: 900, q: 0.9, gain: 0.3, decay: 0.22, rate: 0.8, thump: 70, reverb: 0.35 },
 };

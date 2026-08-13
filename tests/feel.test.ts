@@ -4,7 +4,19 @@ import { SpreadModel } from '../src/shooting/SpreadModel';
 import { SessionStats } from '../src/stats/SessionStats';
 import { createSeededRandom } from '../src/utils/Random';
 import { clamp, damp, decayToZero, lerp } from '../src/utils/math';
-import { AK47, L96, M4A1, M60, MP5, MP7, UMP45, ALL_WEAPONS } from '../src/weapons/definitions';
+import { SPECIAL_AMMO } from '../src/special/SlotMachine';
+import {
+  AK47,
+  L96,
+  M4A1,
+  M60,
+  MP5,
+  MP7,
+  SLOT_MACHINE,
+  UMP45,
+  ALL_WEAPONS,
+} from '../src/weapons/definitions';
+import { Weapon } from '../src/weapons/Weapon';
 import type { RecoilConfig } from '../src/weapons/WeaponDefinition';
 
 function settle(recoil: RecoilSystem, config: RecoilConfig, seconds: number): void {
@@ -219,6 +231,7 @@ describe('weapon definitions', () => {
       'ump45',
       'm9',
       'm1911',
+      'slotmachine',
     ]);
   });
 
@@ -232,15 +245,29 @@ describe('weapon definitions', () => {
       expect(weapon.spread.max).toBeGreaterThan(weapon.spread.base);
       expect(weapon.ads.fov).toBeLessThan(75);
       expect(weapon.ads.sensitivityMultiplier).toBeLessThanOrEqual(1);
-      expect(weapon.projectile.velocity).toBeGreaterThan(250);
-      expect(weapon.projectile.maxDistance).toBeGreaterThanOrEqual(200);
       expect(weapon.magazineSize).toBeGreaterThanOrEqual(7);
+      expect(weapon.reserveAmmo).toBeGreaterThanOrEqual(0);
+      // Ballistics only bind weapons that actually launch a round. The special
+      // weapon carries a projectile block to satisfy the shared shape and
+      // never uses it, so holding it to muzzle velocities would assert nothing.
+      if (weapon.projectile.damage > 0) {
+        expect(weapon.projectile.velocity).toBeGreaterThan(250);
+        expect(weapon.projectile.maxDistance).toBeGreaterThanOrEqual(200);
+      }
       expect(weapon.audio.mechanical).toBeGreaterThanOrEqual(0);
       expect(weapon.audio.mechanical).toBeLessThanOrEqual(1);
       expect(weapon.audio.reverb).toBeGreaterThanOrEqual(0);
       expect(weapon.audio.reverb).toBeLessThanOrEqual(1);
       expect(weapon.adsMovementMultiplier).toBeLessThanOrEqual(weapon.movementMultiplier);
     }
+  });
+
+  it('gives the special weapon uses rather than ammunition', () => {
+    expect(SLOT_MACHINE.projectile.damage).toBe(0);
+    // Thirty spins and no spare: it cannot be reloaded, only bought again.
+    expect(SLOT_MACHINE.magazineSize).toBe(SPECIAL_AMMO);
+    expect(SLOT_MACHINE.reserveAmmo).toBe(0);
+    expect(new Weapon(SLOT_MACHINE).requestReload()).toBe(false);
   });
 
   it('gives the bolt action a cycle time and a scope, and nothing else one', () => {

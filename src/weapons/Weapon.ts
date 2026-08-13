@@ -37,12 +37,31 @@ export class Weapon {
     dryFired: false,
   };
 
-  constructor(readonly definition: WeaponDefinition) {
+  private reserveRounds: number;
+
+  /**
+   * @param infiniteReserve the shooting range never runs out; zombies does.
+   */
+  constructor(
+    readonly definition: WeaponDefinition,
+    private readonly infiniteReserve = false,
+  ) {
     this.ammoInMagazine = definition.magazineSize;
+    this.reserveRounds = definition.reserveAmmo;
   }
 
   get ammo(): number {
     return this.ammoInMagazine;
+  }
+
+  /** Spare rounds available to reload with. Infinite at the range. */
+  get reserve(): number {
+    return this.infiniteReserve ? Infinity : this.reserveRounds;
+  }
+
+  /** True when the magazine is empty and there is nothing left to load. */
+  get isOutOfAmmo(): boolean {
+    return this.ammoInMagazine === 0 && this.reserve <= 0;
   }
 
   get magazineSize(): number {
@@ -106,9 +125,15 @@ export class Weapon {
   requestReload(): boolean {
     if (this.isReloading || this.isEquipping) return false;
     if (this.ammoInMagazine >= this.definition.magazineSize) return false;
+    if (this.reserve <= 0) return false;
     this.reloadTimer = this.definition.reloadTime;
     this.boltTimer = 0;
     return true;
+  }
+
+  /** Tops the spare ammo back up, as the mansion's ammo boxes do. */
+  refillReserve(): void {
+    this.reserveRounds = this.definition.reserveAmmo;
   }
 
   /** Returns true when the weapon supports more than one mode and switched. */
@@ -153,7 +178,12 @@ export class Weapon {
       this.reloadTimer -= dt;
       if (this.reloadTimer <= 0) {
         this.reloadTimer = 0;
-        this.ammoInMagazine = this.definition.magazineSize;
+        // A partial reload is the honest outcome when the reserve is nearly
+        // gone: you get what is left, not a full magazine.
+        const wanted = this.definition.magazineSize - this.ammoInMagazine;
+        const taken = this.infiniteReserve ? wanted : Math.min(wanted, this.reserveRounds);
+        if (!this.infiniteReserve) this.reserveRounds -= taken;
+        this.ammoInMagazine += taken;
         this.burstShots = 0;
         result.reloadFinished = true;
       }

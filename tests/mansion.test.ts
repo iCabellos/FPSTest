@@ -6,6 +6,7 @@ import {
   PERIMETER,
   PLAYER_SPAWN,
   ROOMS,
+  WALL_HEIGHT,
   isInsideRoom,
   roomAt,
   roomById,
@@ -28,7 +29,9 @@ function wallLength(wall: WallSpec): number {
 describe('doorway cutting', () => {
   it('leaves a run untouched when nothing crosses it', () => {
     const wall: WallSpec = { x1: -5, z1: 3, x2: 5, z2: 3 };
-    expect(cutDoorways(wall, [])).toEqual([{ x1: -5, z1: 3, x2: 5, z2: 3 }]);
+    expect(cutDoorways(wall, [])).toEqual([
+      { x1: -5, z1: 3, x2: 5, z2: 3, y1: 0, y2: WALL_HEIGHT },
+    ]);
   });
 
   it('splits a run into two pieces around an opening', () => {
@@ -37,8 +40,8 @@ describe('doorway cutting', () => {
       { id: 'd', between: ['a', 'b'], x: 0, z: 0, axis: 'x', width: 2, barrier: null },
     ]);
     expect(pieces).toHaveLength(2);
-    expect(pieces[0]).toEqual({ x1: -5, z1: 0, x2: -1, z2: 0 });
-    expect(pieces[1]).toEqual({ x1: 1, z1: 0, x2: 5, z2: 0 });
+    expect(pieces[0]).toEqual({ x1: -5, z1: 0, x2: -1, z2: 0, y1: 0, y2: WALL_HEIGHT });
+    expect(pieces[1]).toEqual({ x1: 1, z1: 0, x2: 5, z2: 0, y1: 0, y2: WALL_HEIGHT });
   });
 
   it('ignores doorways that belong to a different wall', () => {
@@ -64,8 +67,8 @@ describe('doorway cutting', () => {
       { id: 'd', between: ['a', 'b'], x: 3, z: 0, axis: 'z', width: 4, barrier: null },
     ]);
     expect(pieces).toEqual([
-      { x1: 3, z1: -6, x2: 3, z2: -2 },
-      { x1: 3, z1: 2, x2: 3, z2: 6 },
+      { x1: 3, z1: -6, x2: 3, z2: -2, y1: 0, y2: WALL_HEIGHT },
+      { x1: 3, z1: 2, x2: 3, z2: 6, y1: 0, y2: WALL_HEIGHT },
     ]);
   });
 });

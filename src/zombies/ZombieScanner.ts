@@ -14,6 +14,8 @@ const tmpDirection = new THREE.Vector3();
  */
 export class ZombieScanner implements SegmentScanner {
   lastZombie: Zombie | null = null;
+  /** True when the last successful scan entered through the head. */
+  lastHeadshot = false;
 
   constructor(
     private readonly world: SceneScanner,
@@ -22,6 +24,7 @@ export class ZombieScanner implements SegmentScanner {
 
   scan(from: THREE.Vector3, to: THREE.Vector3, out: SegmentHit): boolean {
     this.lastZombie = null;
+    this.lastHeadshot = false;
 
     const hitWorld = this.world.scan(from, to, out);
     const hitZombie = this.zombies.intersect(from, to);
@@ -35,6 +38,7 @@ export class ZombieScanner implements SegmentScanner {
     out.object = null;
     out.distance = hitZombie.distance;
     this.lastZombie = hitZombie.zombie;
+    this.lastHeadshot = hitZombie.headshot;
     return true;
   }
 

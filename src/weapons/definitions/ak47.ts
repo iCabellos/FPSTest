@@ -8,6 +8,7 @@ export const AK47: WeaponDefinition = {
   fireModes: ['auto', 'semi'],
   rpm: 600,
   magazineSize: 30,
+  reserveAmmo: 240,
   reloadTime: 2.7,
   equipTime: 0.68,
   recoil: {

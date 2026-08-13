@@ -11,6 +11,7 @@ export const M1911: WeaponDefinition = {
   fireModes: ['semi'],
   rpm: 380,
   magazineSize: 7,
+  reserveAmmo: 56,
   reloadTime: 2.3,
   equipTime: 0.38,
   recoil: {

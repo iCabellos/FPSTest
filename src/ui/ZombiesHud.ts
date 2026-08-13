@@ -5,6 +5,8 @@ export interface ZombiesHudState {
   maxHealth: number;
   weaponName: string;
   ammo: number;
+  /** Spare rounds left; Infinity where ammo is free. */
+  reserve: number;
   magazineSize: number;
   zombiesLeft: number;
   /** Prompt shown when standing at a buyable barrier, or null. */
@@ -96,11 +98,17 @@ export class ZombiesHud {
       this.weapon.textContent = state.weaponName;
       this.last.weaponName = state.weaponName;
     }
-    if (state.ammo !== this.last.ammo || state.magazineSize !== this.last.magazineSize) {
-      this.ammo.textContent = `${state.ammo} / ${state.magazineSize}`;
-      this.ammo.classList.toggle('hud__ammo--low', state.ammo <= state.magazineSize * 0.25);
+    if (state.ammo !== this.last.ammo || state.reserve !== this.last.reserve) {
+      // Magazine over spare: what matters in the mansion is what is left to
+      // load, not the size of the magazine you already know.
+      const reserve = Number.isFinite(state.reserve) ? `${state.reserve}` : '\u221e';
+      this.ammo.textContent = `${state.ammo} / ${reserve}`;
+      this.ammo.classList.toggle(
+        'hud__ammo--low',
+        state.ammo <= state.magazineSize * 0.25 || state.reserve === 0,
+      );
       this.last.ammo = state.ammo;
-      this.last.magazineSize = state.magazineSize;
+      this.last.reserve = state.reserve;
     }
     if (state.zombiesLeft !== this.last.zombiesLeft) {
       this.zombies.textContent = `${state.zombiesLeft}`;

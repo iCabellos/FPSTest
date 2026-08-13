@@ -6,7 +6,7 @@ import {
   disposeWeaponMaterials,
   type WeaponModel,
 } from '../src/weapons/viewmodel/WeaponModelFactory';
-import { ALL_WEAPONS } from '../src/weapons/definitions';
+import { ALL_WEAPONS, WEAPONS_BY_ID } from '../src/weapons/definitions';
 import type { WeaponId } from '../src/weapons/WeaponDefinition';
 
 const materials = createWeaponMaterials();
@@ -70,6 +70,9 @@ describe('weapon models', () => {
 
   it('hangs the magazine below the bore so the reload swap reads', () => {
     for (const [id, model] of models) {
+      // A weapon with no spare ammunition is never reloaded, so it has no
+      // magazine swap to animate and is not required to model one.
+      if (WEAPONS_BY_ID[id].reserveAmmo === 0) continue;
       expect(model.magazine, id).not.toBeNull();
       expect(model.magazine!.position.y, id).toBeLessThanOrEqual(0);
     }

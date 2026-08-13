@@ -11,6 +11,8 @@
  * perimeter, and no holes to fall through.
  */
 
+import type { WeaponId } from '../weapons/WeaponDefinition';
+
 export interface RoomSpec {
   id: string;
   name: string;
@@ -46,6 +48,25 @@ export interface BarrierSpec {
   kind: 'door' | 'double-door' | 'debris';
 }
 
+/**
+ * A boarded window in an exterior wall. Zombies spawn on the lawn, walk to a
+ * window, tear the boards off and climb in; the sill is solid, so the player
+ * can never walk out of one.
+ */
+export interface WindowSpec {
+  id: string;
+  /** Room the window opens into. */
+  room: string;
+  /** Centre of the opening, on the wall line. */
+  x: number;
+  z: number;
+  /** Opening runs along this axis. */
+  axis: 'x' | 'z';
+  width: number;
+  /** Unit step from the wall toward the lawn. */
+  outward: readonly [number, number];
+}
+
 /** A wall run. Doorways punched into it are computed, not hand placed. */
 export interface WallSpec {
   x1: number;
@@ -54,8 +75,30 @@ export interface WallSpec {
   z2: number;
 }
 
+/** Wall mounted purchase point: a weapon on the wall, or an ammo crate. */
+export interface WallBuySpec {
+  id: string;
+  room: string;
+  /** Which of the room's four walls it hangs on. */
+  side: 'north' | 'south' | 'east' | 'west';
+  /** Position along that wall, as a fraction from its low corner. */
+  along: number;
+  kind: 'weapon' | 'ammo';
+  /** Set for weapon buys. */
+  weapon?: WeaponId;
+  cost: number;
+  /** Cost to top the weapon up once you already carry it. */
+  refillCost: number;
+}
+
 export const WALL_HEIGHT = 3.6;
 export const WALL_THICKNESS = 0.34;
+
+/** Bottom and top of a window opening. */
+export const WINDOW_SILL = 1.05;
+export const WINDOW_HEAD = 2.5;
+/** Planks nailed across each window; a zombie pulls one off at a time. */
+export const WINDOW_BOARDS = 4;
 
 /** Outer shell, as a closed loop so the building cannot leak. */
 export const PERIMETER: readonly WallSpec[] = [
@@ -275,6 +318,67 @@ export const DOORWAYS: readonly DoorwaySpec[] = [
   },
 ];
 
+/**
+ * Windows, all in exterior walls. Their placement decides the whole difficulty
+ * curve: the free starting area only touches the outside along the foyer's
+ * front wall, so round one always comes through those two windows. Buying a
+ * door opens that wing's windows as new lanes at the same time as it opens the
+ * route, which is why the map gets harder as it gets bigger.
+ */
+export const WINDOWS: readonly WindowSpec[] = [
+  // Foyer, the starting room: the only lane available on round one.
+  { id: 'foyer-w', room: 'foyer', x: -3.6, z: 14, axis: 'x', width: 1.7, outward: [0, 1] },
+  { id: 'foyer-e', room: 'foyer', x: 3.6, z: 14, axis: 'x', width: 1.7, outward: [0, 1] },
+  // Kitchen, west wing.
+  { id: 'kitchen-n', room: 'kitchen', x: -12, z: 14, axis: 'x', width: 1.7, outward: [0, 1] },
+  { id: 'kitchen-w1', room: 'kitchen', x: -18, z: 9, axis: 'z', width: 1.7, outward: [-1, 0] },
+  { id: 'kitchen-w2', room: 'kitchen', x: -18, z: 3.5, axis: 'z', width: 1.7, outward: [-1, 0] },
+  // Library, east wing.
+  { id: 'library-n', room: 'library', x: 12, z: 14, axis: 'x', width: 1.7, outward: [0, 1] },
+  { id: 'library-e1', room: 'library', x: 18, z: 9, axis: 'z', width: 1.7, outward: [1, 0] },
+  { id: 'library-e2', room: 'library', x: 18, z: 3.5, axis: 'z', width: 1.7, outward: [1, 0] },
+  // Dining room and study, mid depth.
+  { id: 'dining-w1', room: 'dining', x: -18, z: -4, axis: 'z', width: 1.7, outward: [-1, 0] },
+  { id: 'dining-w2', room: 'dining', x: -18, z: -10, axis: 'z', width: 1.7, outward: [-1, 0] },
+  { id: 'study-e1', room: 'study', x: 18, z: -4, axis: 'z', width: 1.7, outward: [1, 0] },
+  { id: 'study-e2', room: 'study', x: 18, z: -10, axis: 'z', width: 1.7, outward: [1, 0] },
+  // Vault, the deepest room, and the most exposed.
+  { id: 'vault-s1', room: 'vault', x: -9, z: -22, axis: 'x', width: 1.7, outward: [0, -1] },
+  { id: 'vault-s2', room: 'vault', x: 0, z: -22, axis: 'x', width: 1.7, outward: [0, -1] },
+  { id: 'vault-s3', room: 'vault', x: 9, z: -22, axis: 'x', width: 1.7, outward: [0, -1] },
+  { id: 'vault-w', room: 'vault', x: -18, z: -18, axis: 'z', width: 1.7, outward: [-1, 0] },
+  { id: 'vault-e', room: 'vault', x: 18, z: -18, axis: 'z', width: 1.7, outward: [1, 0] },
+];
+
+/**
+ * Wall buys. Prices climb with how deep the room is, so the arsenal unlocks
+ * in step with the doors. The special weapon hangs in the vault, the last room
+ * on the route, and is the single most expensive thing in the mansion.
+ */
+export const WALL_BUYS: readonly WallBuySpec[] = [
+  { id: 'wall-m1911', room: 'foyer', side: 'west', along: 0.5, kind: 'weapon', weapon: 'm1911', cost: 500, refillCost: 250 },
+  { id: 'wall-mp5', room: 'hall', side: 'east', along: 0.2, kind: 'weapon', weapon: 'mp5', cost: 1000, refillCost: 450 },
+  { id: 'ammo-hall', room: 'hall', side: 'west', along: 0.2, kind: 'ammo', cost: 650, refillCost: 650 },
+  { id: 'wall-ak47', room: 'kitchen', side: 'north', along: 0.15, kind: 'weapon', weapon: 'ak47', cost: 1800, refillCost: 600 },
+  { id: 'ammo-kitchen', room: 'kitchen', side: 'south', along: 0.72, kind: 'ammo', cost: 650, refillCost: 650 },
+  { id: 'wall-m4a1', room: 'library', side: 'north', along: 0.85, kind: 'weapon', weapon: 'm4a1', cost: 1800, refillCost: 600 },
+  { id: 'ammo-library', room: 'library', side: 'south', along: 0.28, kind: 'ammo', cost: 650, refillCost: 650 },
+  { id: 'wall-ump45', room: 'dining', side: 'west', along: 0.5, kind: 'weapon', weapon: 'ump45', cost: 1400, refillCost: 500 },
+  { id: 'wall-mp7', room: 'study', side: 'east', along: 0.5, kind: 'weapon', weapon: 'mp7', cost: 1600, refillCost: 550 },
+  { id: 'ammo-gallery', room: 'gallery', side: 'west', along: 0.15, kind: 'ammo', cost: 650, refillCost: 650 },
+  { id: 'wall-m60', room: 'gallery', side: 'east', along: 0.15, kind: 'weapon', weapon: 'm60', cost: 2600, refillCost: 900 },
+  { id: 'wall-l96', room: 'vault', side: 'west', along: 0.85, kind: 'weapon', weapon: 'l96', cost: 2000, refillCost: 700 },
+  { id: 'ammo-vault', room: 'vault', side: 'north', along: 0.16, kind: 'ammo', cost: 650, refillCost: 650 },
+  // The special weapon: last room, on the wall, and priced accordingly.
+  { id: 'wall-special', room: 'vault', side: 'south', along: 0.375, kind: 'weapon', weapon: 'slotmachine', cost: 4000, refillCost: 1500 },
+];
+
+/**
+ * Rooms the mystery box can land in. The free starting area (foyer and great
+ * hall) is excluded so the box always costs a door to reach.
+ */
+export const BOX_ROOMS: readonly string[] = ['kitchen', 'library', 'dining', 'study', 'gallery', 'vault'];
+
 /** Where the player starts: just inside the front door. */
 export const PLAYER_SPAWN = { x: 0, z: 11.5 };
 
@@ -296,4 +400,59 @@ export function isInsideRoom(room: RoomSpec, x: number, z: number): boolean {
 /** The room containing a point, or null when outside the building. */
 export function roomAt(x: number, z: number): RoomSpec | null {
   return ROOMS.find((room) => isInsideRoom(room, x, z)) ?? null;
+}
+
+/** A spot on a room's wall, with the direction that faces into the room. */
+export interface WallMount {
+  x: number;
+  z: number;
+  /** Unit vector pointing away from the wall, into the room. */
+  inwardX: number;
+  inwardZ: number;
+  /** Yaw that turns an object's +Z toward the room. */
+  rotationY: number;
+}
+
+/**
+ * Resolves a `(room, side, along)` triple into a world spot on that wall.
+ * Derived rather than hand placed, so a wall buy can never end up floating in
+ * mid air or buried inside a wall when the plan changes.
+ */
+export function wallMount(room: RoomSpec, side: WallBuySpec['side'], along: number): WallMount {
+  const fraction = Math.min(1, Math.max(0, along));
+  const inset = WALL_THICKNESS / 2;
+  switch (side) {
+    case 'north':
+      return {
+        x: room.minX + (room.maxX - room.minX) * fraction,
+        z: room.maxZ - inset,
+        inwardX: 0,
+        inwardZ: -1,
+        rotationY: Math.PI,
+      };
+    case 'south':
+      return {
+        x: room.minX + (room.maxX - room.minX) * fraction,
+        z: room.minZ + inset,
+        inwardX: 0,
+        inwardZ: 1,
+        rotationY: 0,
+      };
+    case 'east':
+      return {
+        x: room.maxX - inset,
+        z: room.minZ + (room.maxZ - room.minZ) * fraction,
+        inwardX: -1,
+        inwardZ: 0,
+        rotationY: -Math.PI / 2,
+      };
+    default:
+      return {
+        x: room.minX + inset,
+        z: room.minZ + (room.maxZ - room.minZ) * fraction,
+        inwardX: 1,
+        inwardZ: 0,
+        rotationY: Math.PI / 2,
+      };
+  }
 }

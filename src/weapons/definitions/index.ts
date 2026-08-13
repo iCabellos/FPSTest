@@ -7,6 +7,7 @@ import { M60 } from './m60';
 import { M9 } from './m9';
 import { MP5 } from './mp5';
 import { MP7 } from './mp7';
+import { SLOT_MACHINE } from './slotmachine';
 import { UMP45 } from './ump45';
 
 /** Every weapon the game knows about. */
@@ -20,6 +21,7 @@ export const ALL_WEAPONS: readonly WeaponDefinition[] = [
   UMP45,
   M9,
   M1911,
+  SLOT_MACHINE,
 ];
 
 export const WEAPONS_BY_ID: Readonly<Record<WeaponId, WeaponDefinition>> = {
@@ -32,6 +34,7 @@ export const WEAPONS_BY_ID: Readonly<Record<WeaponId, WeaponDefinition>> = {
   ump45: UMP45,
   m9: M9,
   m1911: M1911,
+  slotmachine: SLOT_MACHINE,
 };
 
-export { AK47, L96, M1911, M4A1, M60, M9, MP5, MP7, UMP45 };
+export { AK47, L96, M1911, M4A1, M60, M9, MP5, MP7, SLOT_MACHINE, UMP45 };
