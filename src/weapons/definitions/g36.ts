@@ -54,6 +54,5 @@ export const G36: WeaponDefinition = {
     decay: 0.12,
     tailDecay: 0.4,
     mechanical: 0.66,
-    reverb: 0.58,
   },
 };

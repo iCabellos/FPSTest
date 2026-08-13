@@ -126,8 +126,6 @@ export interface WeaponAudioConfig {
   tailDecay: number;
   /** Level of the mechanical action clack layered on top (0..1). */
   mechanical: number;
-  /** How much of the shot feeds the range echo (0..1). */
-  reverb: number;
 }
 
 export interface WeaponDefinition {

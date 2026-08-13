@@ -65,6 +65,5 @@ export const M1911: WeaponDefinition = {
     decay: 0.15,
     tailDecay: 0.38,
     mechanical: 0.72,
-    reverb: 0.48,
   },
 };

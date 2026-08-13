@@ -55,6 +55,5 @@ export const DEAGLE: WeaponDefinition = {
     decay: 0.2,
     tailDecay: 0.62,
     mechanical: 0.6,
-    reverb: 0.72,
   },
 };

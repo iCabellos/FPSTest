@@ -62,6 +62,5 @@ export const AK47: WeaponDefinition = {
     decay: 0.19,
     tailDecay: 0.55,
     mechanical: 0.75,
-    reverb: 0.7,
   },
 };

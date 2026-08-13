@@ -9,10 +9,12 @@ import type { BoxObstacle } from '../../range/ShootingRange';
 import { SceneScanner } from '../../shooting/SceneScanner';
 import { ShootingSystem } from '../../shooting/ShootingSystem';
 import { RoundManager } from '../../rounds/RoundManager';
+import { CoinBurst } from '../../special/CoinBurst';
 import { GrenadeSwarm } from '../../special/GrenadeSwarm';
 import { LaserReadout } from '../../special/LaserReadout';
 import { NukeSequence } from '../../special/NukeSequence';
-import { SlotMachine, type SlotSymbol } from '../../special/SlotMachine';
+import { SlotMachine, countGrenades, type SlotSymbol } from '../../special/SlotMachine';
+import { SlotMachineAnimator } from '../../special/SlotMachineAnimator';
 import { SessionStats } from '../../stats/SessionStats';
 import { ZombiesHud, type ZombiesHudState } from '../../ui/ZombiesHud';
 import type { WeaponDefinition } from '../../weapons/WeaponDefinition';
@@ -87,6 +89,20 @@ export class ZombiesMode implements GameMode {
   private readonly grenades: GrenadeSwarm;
   private readonly nuke: NukeSequence;
   private readonly readout: LaserReadout;
+  private readonly coins: CoinBurst;
+  /**
+   * Built the first time the cabinet is actually held, because it needs the
+   * view model's parts and those only exist once the weapon has been drawn.
+   */
+  private slotAnimator: SlotMachineAnimator | null = null;
+  /** The spin the reels are still landing on; resolved when they settle. */
+  private pendingSpin: {
+    symbols: SlotSymbol[];
+    grenadeAngles: number[];
+    jackpot: boolean;
+    pity: number;
+    guaranteed: boolean;
+  } | null = null;
 
   private readonly intent: MoveIntent = { forward: 0, right: 0 };
   private readonly colliders: THREE.Object3D[] = [];
@@ -152,6 +168,7 @@ export class ZombiesMode implements GameMode {
     this.grenades = new GrenadeSwarm(this.world);
     this.nuke = new NukeSequence(this.world);
     this.readout = new LaserReadout(this.world);
+    this.coins = new CoinBurst(this.world);
 
     this.worldScanner = new SceneScanner(this.mansion.collectColliders(this.colliders));
     this.scanner = new ZombieScanner(this.worldScanner, this.zombies);
@@ -186,6 +203,7 @@ export class ZombiesMode implements GameMode {
   }
 
   swapWeapon(): void {
+    this.slotAnimator = null;
     this.weapons.swap();
   }
 
@@ -210,7 +228,7 @@ export class ZombiesMode implements GameMode {
 
     const input = this.context.input;
 
-    if (input.wasKeyPressed('KeyQ')) this.weapons.swap();
+    if (input.wasKeyPressed('KeyQ')) this.swapWeapon();
     if (input.wasKeyPressed('KeyR')) this.weapons.requestReload();
     if (input.wasKeyPressed('KeyB')) this.weapons.toggleFireMode();
     if (input.wasKeyPressed('KeyF')) this.interact();
@@ -247,7 +265,9 @@ export class ZombiesMode implements GameMode {
     this.targets[0] = { position: this.player.position, alive: !this.dead };
     this.zombies.update(dt, this.targets);
     this.grenades.update(dt, (point, radius, damage) => this.explode(point, radius, damage));
+    this.coins.update(dt);
     this.readout.update(dt);
+    this.updateSlotMachine(dt);
     this.rounds.update(dt);
     this.effects.update(dt, this.shooting.ballistics, this.context.render.camera.quaternion);
 
@@ -263,6 +283,7 @@ export class ZombiesMode implements GameMode {
     this.grenades.dispose();
     this.nuke.dispose();
     this.readout.dispose();
+    this.coins.dispose();
     this.box.dispose();
     this.mansion.dispose();
   }
@@ -387,20 +408,98 @@ export class ZombiesMode implements GameMode {
     const outcome = this.slot.spin(bearing);
     if (!outcome) return true;
 
-    this.viewModel.getMuzzleWorld(camera, tmpMuzzle);
-    for (const angle of outcome.grenadeAngles) this.grenades.launch(tmpMuzzle, angle);
-
-    this.showReadout(outcome.symbols, outcome.pity, this.slot.isJackpotGuaranteed);
-    this.context.audio.play('charge', outcome.jackpot ? 1 : 0.6);
-
-    if (outcome.jackpot) {
-      this.nuke.begin(this.player.position, camera);
-      this.showBanner('NUCLEAR', 4);
-    } else if (outcome.grenadeAngles.length === 0) {
-      // Every reel a blank, or a lone nuclear: nothing happens, by design.
-      this.context.audio.play('dryFire', 0.5);
-    }
+    // Throw the lever and start the reels. Nothing else happens yet: the
+    // payout waits for the reels to actually land on it, which is the entire
+    // reason to watch a slot machine at all.
+    this.context.audio.play('slotLever', 1);
+    this.pendingSpin = {
+      symbols: outcome.symbols,
+      grenadeAngles: outcome.grenadeAngles,
+      jackpot: outcome.jackpot,
+      pity: outcome.pity,
+      guaranteed: this.slot.isJackpotGuaranteed,
+    };
+    this.slotAnimation()?.spin({ symbols: outcome.symbols, jackpot: outcome.jackpot });
     return true;
+  }
+
+  /** The animator for the cabinet in hand, or null when it is not held. */
+  private slotAnimation(): SlotMachineAnimator | null {
+    if (this.weapons.current.definition.id !== 'slotmachine') return null;
+    if (!this.slotAnimator) {
+      const model = this.viewModel.currentModel;
+      if (!model) return null;
+      this.slotAnimator = new SlotMachineAnimator(model.extras);
+    }
+    return this.slotAnimator;
+  }
+
+  /**
+   * Runs the reels and pays out the moment they stop.
+   *
+   * Each reel biting gets its own rising click, so five reels landing left to
+   * right climbs a scale — and on the last one everything the spin rolled
+   * happens at once.
+   */
+  private updateSlotMachine(dt: number): void {
+    const animator = this.slotAnimation();
+    if (!animator) return;
+
+    const events = animator.update(dt);
+    if (events.reelStopped >= 0) {
+      // Pitch rises with each reel, so the run up is audible.
+      this.context.audio.play('slotReel', 0.7 + events.reelStopped * 0.08);
+      this.cameraRig.addShake(0.12);
+    }
+    if (events.settled) this.resolveSpin();
+  }
+
+  /** Everything the reels just landed on, all at once. */
+  private resolveSpin(): void {
+    const spin = this.pendingSpin;
+    this.pendingSpin = null;
+    if (!spin) return;
+
+    const animator = this.slotAnimation();
+    const grenades = countGrenades(spin.symbols);
+    const won = spin.jackpot || grenades > 0;
+
+    this.showReadout(spin.symbols, spin.pity, spin.guaranteed, spin.jackpot);
+    animator?.celebrateWith(spin.jackpot);
+
+    // Coins out of the payout tray, one handful per grenade and a fortune on
+    // a jackpot.
+    if (won) {
+      this.viewModel.getEjectionWorld(this.context.render.camera, tmpMuzzle);
+      this.context.render.camera.getWorldDirection(tmpForward);
+      this.coins.burst(tmpMuzzle, tmpForward, spin.jackpot ? 60 : grenades * 9);
+      for (let i = 0; i < (spin.jackpot ? 8 : 3); i++) {
+        this.context.audio.play('coin', 0.8, i * 0.07 + Math.random() * 0.05);
+      }
+    }
+
+    this.viewModel.getMuzzleWorld(this.context.render.camera, tmpMuzzle);
+    for (const angle of spin.grenadeAngles) this.grenades.launch(tmpMuzzle, angle);
+
+    if (spin.jackpot) {
+      this.context.audio.play('slotJackpot', 1);
+      this.context.audio.play('slotSiren', 0.9, 0.2);
+      this.context.audio.play('slotSiren', 0.9, 1.1);
+      this.cameraRig.addShake(1);
+      this.nuke.begin(this.player.position, this.context.render.camera);
+      this.showBanner('★ JACKPOT ★', 4);
+      return;
+    }
+
+    if (grenades > 0) {
+      this.context.audio.play('slotWin', 1);
+      this.showBanner(`${grenades} GRENADE${grenades > 1 ? 'S' : ''}`, 1.6);
+      return;
+    }
+
+    // Every reel a blank, or a lone nuclear: nothing happens, by design.
+    this.context.audio.play('dryFire', 0.5);
+    this.showBanner('NOTHING', 1.2);
   }
 
   /** Projects the spin onto whatever the weapon is pointing at. */
@@ -408,6 +507,7 @@ export class ZombiesMode implements GameMode {
     symbols: readonly SlotSymbol[],
     pity: number,
     guaranteed: boolean,
+    jackpot: boolean,
   ): void {
     const camera = this.context.render.camera;
     camera.getWorldDirection(tmpForward);
@@ -419,7 +519,7 @@ export class ZombiesMode implements GameMode {
     const distance = hit === null ? READOUT_DISTANCE : Math.max(1.1, hit - 0.12);
     tmpAimPoint.copy(tmpEye).addScaledVector(tmpForward, distance);
 
-    this.readout.show(tmpAimPoint, camera.quaternion, symbols, pity, guaranteed);
+    this.readout.show(tmpAimPoint, camera.quaternion, symbols, pity, guaranteed, jackpot);
   }
 
   private updateNuke(dt: number): void {
@@ -435,7 +535,9 @@ export class ZombiesMode implements GameMode {
 
     this.zombies.update(dt, this.targets);
     this.grenades.update(dt, (point, radius, damage) => this.explode(point, radius, damage));
+    this.coins.update(dt);
     this.readout.update(dt);
+    this.slotAnimation()?.update(dt);
     this.mansion.update(dt);
     this.effects.update(dt, this.shooting.ballistics, this.context.render.camera.quaternion);
     this.nuke.applyCamera(this.context.render.camera);
@@ -608,6 +710,8 @@ export class ZombiesMode implements GameMode {
   private giveWeapon(weapon: WeaponDefinition): void {
     // Re-buying the special weapon restores its uses and its pity counter.
     if (weapon.id === 'slotmachine') this.slot.reset();
+    // The view model rebuilds on a swap, so the animator has to follow it.
+    this.slotAnimator = null;
     this.weapons.giveWeapon(weapon);
     this.showBanner(weapon.name);
   }

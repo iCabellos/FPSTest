@@ -265,8 +265,6 @@ describe('weapon definitions', () => {
       }
       expect(weapon.audio.mechanical).toBeGreaterThanOrEqual(0);
       expect(weapon.audio.mechanical).toBeLessThanOrEqual(1);
-      expect(weapon.audio.reverb).toBeGreaterThanOrEqual(0);
-      expect(weapon.audio.reverb).toBeLessThanOrEqual(1);
       expect(weapon.adsMovementMultiplier).toBeLessThanOrEqual(weapon.movementMultiplier);
     }
   });
@@ -305,7 +303,6 @@ describe('weapon definitions', () => {
     // Bigger calibres sit lower and ring out longer than the pistol rounds.
     expect(M60.audio.bodyFrequency).toBeLessThan(MP7.audio.bodyFrequency);
     expect(L96.audio.tailDecay).toBeGreaterThan(MP5.audio.tailDecay);
-    expect(L96.audio.reverb).toBeGreaterThan(MP7.audio.reverb);
   });
 
   it('gives the submachine guns their own handling niche', () => {

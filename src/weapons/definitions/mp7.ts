@@ -66,6 +66,5 @@ export const MP7: WeaponDefinition = {
     decay: 0.085,
     tailDecay: 0.24,
     mechanical: 0.95,
-    reverb: 0.32,
   },
 };

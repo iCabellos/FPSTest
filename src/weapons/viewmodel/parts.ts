@@ -28,6 +28,32 @@ export interface WeaponMaterials {
   blued: THREE.Material;
   /** Desert tan polymer, so not every weapon is the same grey. */
   tan: THREE.Material;
+  /** Polished chrome, for cabinet trim. */
+  chrome: THREE.Material;
+  /**
+   * Self lit arcade colours. Emissive rather than shaded, so the slot machine
+   * glows in a dark mansion instead of going the same grey as everything else.
+   */
+  neonRed: THREE.Material;
+  neonAmber: THREE.Material;
+  neonGreen: THREE.Material;
+  neonBlue: THREE.Material;
+  neonPink: THREE.Material;
+  /**
+   * Actually see through, unlike `glass`, which is an opaque tinted lens for
+   * scope objectives. Used for the reel window, where the whole point is that
+   * you can read what is behind it.
+   */
+  windowGlass: THREE.Material;
+}
+
+function neon(colour: number): THREE.Material {
+  return new THREE.MeshPhongMaterial({
+    color: colour,
+    emissive: colour,
+    emissiveIntensity: 1,
+    shininess: 80,
+  });
 }
 
 export function createWeaponMaterials(): WeaponMaterials {
@@ -46,6 +72,20 @@ export function createWeaponMaterials(): WeaponMaterials {
     brass: new THREE.MeshPhongMaterial({ color: 0xc9a349, shininess: 95, specular: 0xffe08a }),
     blued: new THREE.MeshPhongMaterial({ color: 0x35393f, shininess: 90, specular: 0x6a7078 }),
     tan: new THREE.MeshPhongMaterial({ color: 0x9a8259, shininess: 14, specular: 0x2a2418 }),
+    chrome: new THREE.MeshPhongMaterial({ color: 0xd8dde4, shininess: 140, specular: 0xffffff }),
+    neonRed: neon(0xff2d55),
+    neonAmber: neon(0xffb020),
+    neonGreen: neon(0x38e07b),
+    neonBlue: neon(0x30c8ff),
+    neonPink: neon(0xff45d0),
+    windowGlass: new THREE.MeshPhongMaterial({
+      color: 0xbfe4ff,
+      transparent: true,
+      opacity: 0.18,
+      shininess: 160,
+      specular: 0xffffff,
+      depthWrite: false,
+    }),
   };
 }
 
@@ -846,6 +886,12 @@ export interface WeaponModel {
   bolt: THREE.Object3D | null;
   /** Detached and replaced during the reload animation. */
   magazine: THREE.Object3D | null;
+  /**
+   * Named part groups a mode may want to animate itself, e.g. the slot
+   * machine's reels and marquee bulbs. A bag rather than more fields on this
+   * interface, because nothing generic should have to know what a reel is.
+   */
+  extras?: Readonly<Record<string, readonly THREE.Object3D[]>>;
 }
 
 export function assemble(
@@ -856,6 +902,7 @@ export function assemble(
     sight: THREE.Object3D;
     bolt?: THREE.Object3D;
     magazine?: THREE.Object3D;
+    extras?: Readonly<Record<string, readonly THREE.Object3D[]>>;
   },
 ): WeaponModel {
   const node = new THREE.Group();
@@ -867,5 +914,6 @@ export function assemble(
     sight: anchors.sight,
     bolt: anchors.bolt ?? null,
     magazine: anchors.magazine ?? null,
+    extras: anchors.extras,
   };
 }

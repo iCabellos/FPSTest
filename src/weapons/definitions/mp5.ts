@@ -65,6 +65,5 @@ export const MP5: WeaponDefinition = {
     decay: 0.11,
     tailDecay: 0.3,
     mechanical: 0.85,
-    reverb: 0.4,
   },
 };
