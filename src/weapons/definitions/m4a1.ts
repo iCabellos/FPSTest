@@ -8,6 +8,7 @@ export const M4A1: WeaponDefinition = {
   fireModes: ['auto', 'semi'],
   rpm: 800,
   magazineSize: 30,
+  reserveAmmo: 270,
   reloadTime: 2.3,
   equipTime: 0.55,
   recoil: {

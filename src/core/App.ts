@@ -2,11 +2,19 @@ import { AudioSystem } from '../audio/AudioSystem';
 import { RenderContext } from '../rendering/RenderContext';
 import { disposeGeneratedTextures } from '../rendering/textures';
 import { installViewLighting } from '../rendering/ViewLighting';
+import {
+  DEFAULT_RANGE_LOADOUT,
+  DEFAULT_ZOMBIES_LOADOUT,
+  type Loadout,
+} from '../loadout/loadout';
+import { LoadoutScreen, type LoadoutKind } from '../ui/LoadoutScreen';
 import { MainMenu, type MenuAction } from '../ui/MainMenu';
 import { GameLoop } from './GameLoop';
 import { Input } from './Input';
+import { TouchControls } from './TouchControls';
 import type { GameMode, ModeContext } from './modes/GameMode';
 import { RangeMode } from './modes/RangeMode';
+import { ZombiesMode } from './modes/ZombiesMode';
 
 /**
  * Application shell. Owns the renderer, input, audio and the frame loop, and
@@ -18,9 +26,13 @@ export class App {
   private readonly audio = new AudioSystem();
   private readonly loop: GameLoop;
   private readonly menu: MainMenu;
+  private readonly loadoutScreen: LoadoutScreen;
+  private readonly touch: TouchControls | null;
   private readonly context: ModeContext;
 
   private mode: GameMode | null = null;
+  private loadout: Loadout = { ...DEFAULT_RANGE_LOADOUT };
+  private pendingMode: LoadoutKind = 'range';
   /** Set while a mode is loaded, so losing pointer lock pauses it. */
   private paused = false;
 
@@ -31,6 +43,15 @@ export class App {
     this.input = new Input(this.render.domElement);
     this.input.onLockChange = (locked) => this.handleLockChange(locked);
 
+    // Thumb sticks only exist on touchscreens; a desktop never sees them.
+    this.touch = TouchControls.isTouchDevice()
+      ? new TouchControls(container, {
+          onSwapWeapon: () => this.mode?.swapWeapon(),
+          onExit: () => this.exitToMenu(),
+        })
+      : null;
+    this.input.attachTouch(this.touch?.state ?? null);
+
     this.loop = new GameLoop((dt) => this.frame(dt));
 
     this.context = {
@@ -40,12 +61,21 @@ export class App {
       container,
       fps: () => this.loop.fps,
       exitToMenu: () => this.exitToMenu(),
+      loadout: this.loadout,
     };
 
     this.menu = new MainMenu(container, {
       onAction: (action) => this.handleMenuAction(action),
       onResume: () => this.requestLock(),
       onQuit: () => this.exitToMenu(),
+    });
+
+    this.loadoutScreen = new LoadoutScreen(container, {
+      onDeploy: (loadout) => this.deploy(loadout),
+      onBack: () => {
+        this.loadoutScreen.close();
+        this.menu.openRoot();
+      },
     });
   }
 
@@ -57,6 +87,8 @@ export class App {
     this.loop.stop();
     this.unloadMode();
     this.menu.dispose();
+    this.loadoutScreen.dispose();
+    this.touch?.dispose();
     this.input.dispose();
     this.audio.dispose();
     disposeGeneratedTextures();
@@ -65,10 +97,22 @@ export class App {
 
   private handleMenuAction(action: MenuAction): void {
     this.audio.resume();
-    if (action.kind === 'range') {
-      this.loadMode(new RangeMode(this.context));
-      this.requestLock();
-    }
+    this.pendingMode = action.kind === 'range' ? 'range' : 'zombies';
+    this.menu.close();
+    this.loadoutScreen.open(
+      this.pendingMode,
+      this.pendingMode === 'range' ? DEFAULT_RANGE_LOADOUT : DEFAULT_ZOMBIES_LOADOUT,
+    );
+  }
+
+  private deploy(loadout: Loadout): void {
+    this.loadout.primary = loadout.primary;
+    this.loadout.secondary = loadout.secondary;
+    this.loadoutScreen.close();
+    this.loadMode(
+      this.pendingMode === 'range' ? new RangeMode(this.context) : new ZombiesMode(this.context),
+    );
+    this.requestLock();
   }
 
   private loadMode(mode: GameMode): void {
@@ -86,17 +130,28 @@ export class App {
 
   private exitToMenu(): void {
     document.exitPointerLock();
+    this.touch?.setVisible(false);
+    this.paused = true;
     this.unloadMode();
+    this.loadoutScreen.close();
     this.menu.openRoot();
   }
 
   private requestLock(): void {
     if (!this.mode) return;
     this.menu.close();
+    if (this.touch) {
+      // Touch play has no pointer to lock: the sticks are the controls.
+      this.touch.setVisible(true);
+      this.paused = false;
+      this.mode.setActive(true);
+      return;
+    }
     this.input.requestPointerLock();
   }
 
   private handleLockChange(locked: boolean): void {
+    if (this.touch) return;
     this.paused = !locked;
     this.mode?.setActive(locked);
     if (locked) {
@@ -105,12 +160,16 @@ export class App {
     }
     // A mode is still loaded, so offer to resume rather than dropping it.
     if (this.mode) this.menu.openPause();
-    else this.menu.openRoot();
+    else if (!this.loadoutScreen.isOpen) this.menu.openRoot();
   }
 
   private frame(dt: number): void {
-    if (this.mode && !this.paused) this.mode.update(dt);
+    if (this.mode && !this.paused) {
+      this.touch?.update(dt);
+      this.mode.update(dt);
+    }
     this.render.render(this.mode !== null);
     this.input.endFrame();
+    this.touch?.endFrame();
   }
 }

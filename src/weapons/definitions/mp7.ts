@@ -11,6 +11,7 @@ export const MP7: WeaponDefinition = {
   fireModes: ['auto', 'semi'],
   rpm: 950,
   magazineSize: 40,
+  reserveAmmo: 280,
   reloadTime: 2.4,
   equipTime: 0.45,
   recoil: {

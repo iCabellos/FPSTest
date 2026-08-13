@@ -8,6 +8,7 @@ export const M60: WeaponDefinition = {
   fireModes: ['auto'],
   rpm: 550,
   magazineSize: 100,
+  reserveAmmo: 400,
   reloadTime: 6,
   equipTime: 1.15,
   recoil: {

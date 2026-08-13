@@ -34,6 +34,29 @@ export class CameraRig {
     this.clampPitch();
   }
 
+  /**
+   * Steers the aim toward a world point. Used by touch auto aim, which snaps
+   * onto a target when the fire stick is pressed rather than asking a thumb
+   * to track it.
+   */
+  aimAt(target: THREE.Vector3, eye: THREE.Vector3, dt: number, strength: number): void {
+    tmpOffset.subVectors(target, eye);
+    const flat = Math.hypot(tmpOffset.x, tmpOffset.z);
+    if (flat < 1e-4) return;
+
+    const desiredYaw = Math.atan2(-tmpOffset.x, -tmpOffset.z);
+    const desiredPitch = Math.atan2(tmpOffset.y, flat);
+
+    let deltaYaw = desiredYaw - this.yaw;
+    while (deltaYaw > Math.PI) deltaYaw -= Math.PI * 2;
+    while (deltaYaw < -Math.PI) deltaYaw += Math.PI * 2;
+
+    const blend = 1 - Math.exp(-strength * dt);
+    this.yaw += deltaYaw * blend;
+    this.pitch += (desiredPitch - this.pitch) * blend;
+    this.clampPitch();
+  }
+
   addShake(amount: number): void {
     this.shake = Math.min(1, this.shake + amount);
     this.shakeSeed = Math.random() * 100;

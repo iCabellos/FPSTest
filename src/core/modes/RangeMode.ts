@@ -13,10 +13,9 @@ import { ScopeOverlay } from '../../ui/ScopeOverlay';
 import { clamp, DEG2RAD } from '../../utils/math';
 import { WeaponSystem } from '../../weapons/WeaponSystem';
 import { ViewModel } from '../../weapons/viewmodel/ViewModel';
-import { MOUSE_LEFT, MOUSE_RIGHT } from '../Input';
+import { resolveLoadout } from '../../loadout/loadout';
 import type { GameMode, ModeContext } from './GameMode';
 
-const WEAPON_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'];
 const CROSSHAIR_MIN_RADIUS = 4;
 const CROSSHAIR_MAX_RADIUS = 140;
 
@@ -86,6 +85,9 @@ export class RangeMode implements GameMode {
       viewModel: this.viewModel,
       shooting: this.shooting,
       audio: context.audio,
+      loadout: resolveLoadout(context.loadout),
+      // A range hands out ammo; the limit belongs to the mansion, not here.
+      infiniteReserve: true,
     });
 
     this.hud = new Hud(context.container);
@@ -93,6 +95,11 @@ export class RangeMode implements GameMode {
 
     this.syncWeaponHud();
     context.render.refreshShadows();
+  }
+
+  swapWeapon(): void {
+    this.weapons.swap();
+    this.syncWeaponHud();
   }
 
   setActive(active: boolean): void {
@@ -123,15 +130,15 @@ export class RangeMode implements GameMode {
 
     this.handleActionKeys();
 
-    this.weapons.setTrigger(input.isButtonDown(MOUSE_LEFT));
-    this.weapons.setAds(input.isButtonDown(MOUSE_RIGHT));
+    this.weapons.setTrigger(input.isFiring);
+    this.weapons.setAds(input.isAiming);
 
     const lookX = input.lookDeltaX;
     const lookY = input.lookDeltaY;
     this.cameraRig.applyLook(lookX, lookY, this.weapons.lookSensitivity);
 
-    this.intent.forward = (input.isKeyDown('KeyW') ? 1 : 0) - (input.isKeyDown('KeyS') ? 1 : 0);
-    this.intent.right = (input.isKeyDown('KeyD') ? 1 : 0) - (input.isKeyDown('KeyA') ? 1 : 0);
+    this.intent.forward = input.moveForward;
+    this.intent.right = input.moveRight;
     this.player.update(dt, this.intent, this.cameraRig.yaw, this.weapons.movementMultiplier);
 
     const moveFraction = this.player.speedFraction;
@@ -156,11 +163,9 @@ export class RangeMode implements GameMode {
   private handleActionKeys(): void {
     const input = this.context.input;
 
-    for (let slot = 0; slot < WEAPON_KEYS.length; slot++) {
-      if (input.wasKeyPressed(WEAPON_KEYS[slot])) {
-        this.weapons.selectSlot(slot);
-        this.syncWeaponHud();
-      }
+    if (input.wasKeyPressed('KeyQ')) {
+      this.weapons.swap();
+      this.syncWeaponHud();
     }
 
     if (input.wasKeyPressed('KeyR')) this.weapons.requestReload();

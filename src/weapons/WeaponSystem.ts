@@ -5,7 +5,7 @@ import { RecoilSystem } from '../shooting/RecoilSystem';
 import type { ShootingSystem } from '../shooting/ShootingSystem';
 import { SpreadModel } from '../shooting/SpreadModel';
 import { lerp } from '../utils/math';
-import { WEAPON_LOADOUT } from './definitions';
+import type { WeaponDefinition, WeaponId } from './WeaponDefinition';
 import { Weapon } from './Weapon';
 import type { ViewModel } from './viewmodel/ViewModel';
 
@@ -14,7 +14,20 @@ export interface WeaponSystemDeps {
   viewModel: ViewModel;
   shooting: ShootingSystem;
   audio: AudioSystem;
+  /** The weapons carried into this match, in slot order. */
+  loadout: readonly WeaponDefinition[];
+  /** True at the range, where ammo is free and unlimited. */
+  infiniteReserve?: boolean;
+  /**
+   * Lets a mode take over a shot before ballistics see it. Return true when
+   * the shot was handled and no bullet should leave the barrel — the special
+   * weapon spins reels instead of firing.
+   */
+  onShot?: (weapon: Weapon) => boolean;
 }
+
+/** How many weapons can be carried at once. */
+export const MAX_SLOTS = 2;
 
 function moveTowards(current: number, target: number, maxDelta: number): number {
   if (current < target) return Math.min(current + maxDelta, target);
@@ -37,7 +50,7 @@ const RELOAD_CUES: ReadonlyArray<{ at: number; id: SoundId; volume: number }> = 
  * shooting system.
  */
 export class WeaponSystem {
-  private readonly weapons: Weapon[] = WEAPON_LOADOUT.map((definition) => new Weapon(definition));
+  private readonly weapons: Weapon[];
   private readonly recoil = new RecoilSystem();
   private readonly spread = new SpreadModel();
 
@@ -48,8 +61,49 @@ export class WeaponSystem {
   private reloadCue = 0;
 
   constructor(private readonly deps: WeaponSystemDeps) {
+    this.weapons = deps.loadout.map(
+      (definition) => new Weapon(definition, deps.infiniteReserve ?? false),
+    );
     this.deps.viewModel.setWeapon(this.current.definition);
     this.current.onEquip();
+  }
+
+  /** True when this weapon is already in a slot. */
+  carries(id: WeaponId): boolean {
+    return this.weapons.some((weapon) => weapon.definition.id === id);
+  }
+
+  /**
+   * Hands over a weapon bought off a wall or pulled from the mystery box.
+   *
+   * Buying one you already carry just tops it up. Otherwise it fills the free
+   * slot, and once both slots are full it replaces the one in your hands —
+   * which is what makes choosing what to hold at the box actually matter.
+   */
+  giveWeapon(definition: WeaponDefinition): void {
+    const existing = this.weapons.findIndex((weapon) => weapon.definition.id === definition.id);
+    if (existing >= 0) {
+      this.weapons[existing].refillReserve();
+      this.selectSlot(existing);
+      return;
+    }
+
+    const fresh = new Weapon(definition, this.deps.infiniteReserve ?? false);
+    if (this.weapons.length < MAX_SLOTS) {
+      this.weapons.push(fresh);
+      this.selectSlot(this.weapons.length - 1);
+      return;
+    }
+
+    this.current.onHolster();
+    this.weapons[this.index] = fresh;
+    this.equipCurrent();
+  }
+
+  /** Refills the spare ammo of whatever is in hand. */
+  refillCurrentAmmo(): void {
+    this.current.refillReserve();
+    this.deps.audio.play('magIn', 0.9);
   }
 
   get current(): Weapon {
@@ -98,12 +152,25 @@ export class WeaponSystem {
     if (this.current.toggleFireMode()) this.deps.audio.play('switch', 0.7);
   }
 
+  get slotCount(): number {
+    return this.weapons.length;
+  }
+
+  /** Cycles to the next carried weapon. Used by the swap key and by touch. */
+  swap(): void {
+    if (this.weapons.length < 2) return;
+    this.selectSlot((this.index + 1) % this.weapons.length);
+  }
+
   selectSlot(slot: number): void {
     if (slot === this.index || slot < 0 || slot >= this.weapons.length) return;
 
     this.current.onHolster();
     this.index = slot;
+    this.equipCurrent();
+  }
 
+  private equipCurrent(): void {
     const weapon = this.current;
     weapon.onEquip();
     this.deps.viewModel.setWeapon(weapon.definition);
@@ -198,7 +265,12 @@ export class WeaponSystem {
     for (let i = 0; i < shots; i++) {
       // Recomputed per round so bloom applies within a single frame too.
       const cone = this.spread.compute(definition.spread, this.adsFactor, moveFraction);
-      this.deps.shooting.fire(weapon, cone);
+      if (!this.deps.onShot?.(weapon)) {
+        // A shotgun launches its whole pattern on one pull, each pellet
+        // sampled from the cone independently.
+        const pellets = Math.max(1, definition.projectile.pellets ?? 1);
+        for (let pellet = 0; pellet < pellets; pellet++) this.deps.shooting.fire(weapon, cone);
+      }
       this.spread.addShot(definition.spread);
 
       const impulse = this.recoil.fire(definition.recoil, firstIndex + i, adsRecoilScale);

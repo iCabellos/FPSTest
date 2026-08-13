@@ -5,6 +5,12 @@ export interface NavNode {
   readonly position: THREE.Vector3;
   /** Zone this node belongs to, used for spawn selection. */
   readonly zone: string;
+  /**
+   * True for nodes a zombie has to climb through rather than walk past, i.e.
+   * window sills. Marked on the node because the geometry that raised it above
+   * the floor and the rule that slows a zombie down there are the same fact.
+   */
+  readonly climb: boolean;
 }
 
 interface NavEdge {
@@ -38,18 +44,27 @@ export class NavGraph {
     this.visited = new Uint8Array(capacity);
   }
 
-  addNode(position: THREE.Vector3, zone: string): number {
+  addNode(position: THREE.Vector3, zone: string, climb = false): number {
     const id = this.nodes.length;
-    this.nodes.push({ id, position: position.clone(), zone });
+    this.nodes.push({ id, position: position.clone(), zone, climb });
     this.edges.push([]);
     return id;
   }
 
   /** Two way link. `barrier` gates passage in both directions. */
   connect(a: number, b: number, barrier: string | null = null): void {
-    const cost = this.nodes[a].position.distanceTo(this.nodes[b].position);
-    this.edges[a].push({ to: b, cost, barrier });
-    this.edges[b].push({ to: a, cost, barrier });
+    this.connectOneWay(a, b, barrier);
+    this.connectOneWay(b, a, barrier);
+  }
+
+  /**
+   * One way link. Used for window sills: a walker climbs in and stays in, so
+   * a route can never treat the building as a shortcut between two points on
+   * the lawn by hopping in one window and straight back out of another.
+   */
+  connectOneWay(from: number, to: number, barrier: string | null = null): void {
+    const cost = this.nodes[from].position.distanceTo(this.nodes[to].position);
+    this.edges[from].push({ to, cost, barrier });
   }
 
   get nodeCount(): number {
@@ -64,11 +79,19 @@ export class NavGraph {
     return this.nodes.filter((candidate) => candidate.zone === zone);
   }
 
-  /** Nearest node by straight line distance, ignoring walls. */
+  /**
+   * Nearest node by straight line distance, ignoring walls.
+   *
+   * Climb nodes are skipped: a sill is somewhere you pass through, never
+   * somewhere anyone stands. Returning one would strand a walker whenever the
+   * player happened to be standing next to a window, because the only edge
+   * into a sill comes from outside the building.
+   */
   nearest(position: THREE.Vector3): number {
     let best = 0;
     let bestDistance = Infinity;
     for (const candidate of this.nodes) {
+      if (candidate.climb) continue;
       const distance = candidate.position.distanceToSquared(position);
       if (distance < bestDistance) {
         bestDistance = distance;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type ZombieState = 'idle' | 'chase' | 'attack' | 'hurt' | 'dead';
+export type ZombieState = 'idle' | 'chase' | 'attack' | 'tear' | 'hurt' | 'dead';
 
 /**
  * One walker. Plain data plus its own small state machine: rendering is done
@@ -27,6 +27,15 @@ export class Zombie {
   /** Seconds until the route is recomputed. */
   repathTimer = 0;
   attackCooldown = 0;
+  /** Seconds until the next plank comes off the window being torn at. */
+  tearCooldown = 0;
+  /**
+   * Sill currently being crossed. Held from the approach until the walker is
+   * clear on the far side, so the rise over the sill and the drop back down
+   * are one continuous arc rather than two unrelated waypoint heights.
+   */
+  readonly climbAnchor = new THREE.Vector3();
+  climbing = false;
   /** Drives the hurt flash and the death sink. */
   stateTimer = 0;
   /** Walk cycle phase, kept per zombie so the crowd is not in lockstep. */
@@ -48,6 +57,8 @@ export class Zombie {
     this.pathCursor = 0;
     this.repathTimer = 0;
     this.attackCooldown = 0;
+    this.tearCooldown = 0;
+    this.climbing = false;
     this.stateTimer = 0;
     this.gait = Math.random() * Math.PI * 2;
     this.facing = 0;

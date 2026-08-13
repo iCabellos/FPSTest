@@ -8,6 +8,7 @@ export const L96: WeaponDefinition = {
   fireModes: ['semi'],
   rpm: 90,
   magazineSize: 10,
+  reserveAmmo: 50,
   reloadTime: 3.4,
   equipTime: 1,
   boltCycleTime: 1.15,

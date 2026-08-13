@@ -6,8 +6,7 @@ import type { TargetHitInfo } from '../range/Target';
 import type { SessionStats } from '../stats/SessionStats';
 import type { Weapon } from '../weapons/Weapon';
 import type { ViewModel } from '../weapons/viewmodel/ViewModel';
-import { BallisticsSystem, type ProjectileImpact } from './Ballistics';
-import type { SceneScanner } from './SceneScanner';
+import { BallisticsSystem, type ProjectileImpact, type SegmentScanner } from './Ballistics';
 import { applyConeSpread } from './SpreadModel';
 
 const AIM_PROBE_DISTANCE = 900;
@@ -23,13 +22,23 @@ const tmpDirection = new THREE.Vector3();
 const tmpEjection = new THREE.Vector3();
 const tmpVelocity = new THREE.Vector3();
 
+/** A segment scanner that can also measure what the crosshair covers. */
+export interface AimScanner extends SegmentScanner {
+  measure(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number): number | null;
+}
+
 export interface ShootingSystemDeps {
   camera: THREE.PerspectiveCamera;
   viewModel: ViewModel;
-  scanner: SceneScanner;
+  scanner: AimScanner;
   effects: EffectsSystem;
   audio: AudioSystem;
   stats: SessionStats;
+  /**
+   * Lets a mode claim an impact before the default handling. Return true when
+   * it was absorbed, so no bullet hole is punched into the world.
+   */
+  resolveImpact?: (impact: ProjectileImpact) => boolean;
 }
 
 /**
@@ -97,6 +106,13 @@ export class ShootingSystem {
     const { effects, audio, stats } = this.deps;
     const { hit, projectile } = impact;
     const energy = projectile.damage / 100;
+
+    if (this.deps.resolveImpact?.(impact)) {
+      effects.spawnImpact(hit.point, hit.normal, energy, false);
+      audio.play('impact', 1 / (1 + projectile.travelled * 0.03), projectile.travelled / SOUND_SPEED);
+      return;
+    }
+
     const target = hit.object ? TargetField.fromObject(hit.object) : null;
 
     if (target) {

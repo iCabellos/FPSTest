@@ -4,7 +4,19 @@ import { SpreadModel } from '../src/shooting/SpreadModel';
 import { SessionStats } from '../src/stats/SessionStats';
 import { createSeededRandom } from '../src/utils/Random';
 import { clamp, damp, decayToZero, lerp } from '../src/utils/math';
-import { AK47, L96, M4A1, M60, MP5, MP7, UMP45, WEAPON_LOADOUT } from '../src/weapons/definitions';
+import { SPECIAL_AMMO } from '../src/special/SlotMachine';
+import {
+  AK47,
+  L96,
+  M4A1,
+  M60,
+  MP5,
+  MP7,
+  SLOT_MACHINE,
+  UMP45,
+  ALL_WEAPONS,
+} from '../src/weapons/definitions';
+import { Weapon } from '../src/weapons/Weapon';
 import type { RecoilConfig } from '../src/weapons/WeaponDefinition';
 
 function settle(recoil: RecoilSystem, config: RecoilConfig, seconds: number): void {
@@ -208,20 +220,31 @@ describe('math helpers', () => {
 });
 
 describe('weapon definitions', () => {
-  it('exposes every range weapon in slot order', () => {
-    expect(WEAPON_LOADOUT.map((weapon) => weapon.id)).toEqual([
+  it('exposes every weapon the game knows about', () => {
+    expect(ALL_WEAPONS.map((weapon) => weapon.id)).toEqual([
       'm4a1',
       'ak47',
+      'scar',
+      'g36',
+      'fal',
       'm60',
       'l96',
       'mp5',
       'mp7',
       'ump45',
+      'uzi',
+      'r870',
+      'spas12',
+      'm9',
+      'm1911',
+      'deagle',
+      'revolver',
+      'slotmachine',
     ]);
   });
 
   it('keeps every definition internally consistent', () => {
-    for (const weapon of WEAPON_LOADOUT) {
+    for (const weapon of ALL_WEAPONS) {
       expect(weapon.rpm).toBeGreaterThan(0);
       expect(weapon.magazineSize).toBeGreaterThan(0);
       expect(weapon.reloadTime).toBeGreaterThan(0);
@@ -230,14 +253,30 @@ describe('weapon definitions', () => {
       expect(weapon.spread.max).toBeGreaterThan(weapon.spread.base);
       expect(weapon.ads.fov).toBeLessThan(75);
       expect(weapon.ads.sensitivityMultiplier).toBeLessThanOrEqual(1);
-      expect(weapon.projectile.velocity).toBeGreaterThan(250);
-      expect(weapon.projectile.maxDistance).toBeGreaterThanOrEqual(200);
+      // Six is the floor: a revolver cylinder, and nothing holds less.
+      expect(weapon.magazineSize).toBeGreaterThanOrEqual(6);
+      expect(weapon.reserveAmmo).toBeGreaterThanOrEqual(0);
+      // Ballistics only bind weapons that actually launch a round. The special
+      // weapon carries a projectile block to satisfy the shared shape and
+      // never uses it, so holding it to muzzle velocities would assert nothing.
+      if (weapon.projectile.damage > 0) {
+        expect(weapon.projectile.velocity).toBeGreaterThan(250);
+        expect(weapon.projectile.maxDistance).toBeGreaterThanOrEqual(200);
+      }
       expect(weapon.audio.mechanical).toBeGreaterThanOrEqual(0);
       expect(weapon.audio.mechanical).toBeLessThanOrEqual(1);
       expect(weapon.audio.reverb).toBeGreaterThanOrEqual(0);
       expect(weapon.audio.reverb).toBeLessThanOrEqual(1);
       expect(weapon.adsMovementMultiplier).toBeLessThanOrEqual(weapon.movementMultiplier);
     }
+  });
+
+  it('gives the special weapon uses rather than ammunition', () => {
+    expect(SLOT_MACHINE.projectile.damage).toBe(0);
+    // Thirty spins and no spare: it cannot be reloaded, only bought again.
+    expect(SLOT_MACHINE.magazineSize).toBe(SPECIAL_AMMO);
+    expect(SLOT_MACHINE.reserveAmmo).toBe(0);
+    expect(new Weapon(SLOT_MACHINE).requestReload()).toBe(false);
   });
 
   it('gives the bolt action a cycle time and a scope, and nothing else one', () => {
@@ -259,10 +298,10 @@ describe('weapon definitions', () => {
   });
 
   it('gives every weapon its own voice', () => {
-    const cracks = WEAPON_LOADOUT.map((weapon) => weapon.audio.crackFrequency);
-    const bodies = WEAPON_LOADOUT.map((weapon) => weapon.audio.bodyFrequency);
-    expect(new Set(cracks).size).toBe(WEAPON_LOADOUT.length);
-    expect(new Set(bodies).size).toBe(WEAPON_LOADOUT.length);
+    const cracks = ALL_WEAPONS.map((weapon) => weapon.audio.crackFrequency);
+    const bodies = ALL_WEAPONS.map((weapon) => weapon.audio.bodyFrequency);
+    expect(new Set(cracks).size).toBe(ALL_WEAPONS.length);
+    expect(new Set(bodies).size).toBe(ALL_WEAPONS.length);
     // Bigger calibres sit lower and ring out longer than the pistol rounds.
     expect(M60.audio.bodyFrequency).toBeLessThan(MP7.audio.bodyFrequency);
     expect(L96.audio.tailDecay).toBeGreaterThan(MP5.audio.tailDecay);

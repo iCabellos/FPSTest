@@ -14,6 +14,8 @@ const MAX_MOVEMENT_PER_EVENT = 180;
  */
 const LOCK_SETTLE_MS = 150;
 
+import type { TouchState } from './TouchControls';
+
 type Listener = { target: EventTarget; type: string; fn: EventListener };
 
 /**
@@ -33,6 +35,8 @@ export class Input {
   private ignoreMovementUntil = 0;
 
   onLockChange: ((locked: boolean) => void) | null = null;
+  /** Set when the device has thumb sticks; folded into the readings below. */
+  private touch: TouchState | null = null;
 
   constructor(private readonly element: HTMLElement) {
     this.on(window, 'keydown', (e) => this.handleKeyDown(e as KeyboardEvent));
@@ -49,12 +53,43 @@ export class Input {
     return this.locked;
   }
 
+  attachTouch(state: TouchState | null): void {
+    this.touch = state;
+  }
+
   get lookDeltaX(): number {
-    return this.lookX;
+    return this.lookX + (this.touch?.lookX ?? 0);
   }
 
   get lookDeltaY(): number {
-    return this.lookY;
+    return this.lookY + (this.touch?.lookY ?? 0);
+  }
+
+  /** -1..1 forward axis, from the keys or the left stick. */
+  get moveForward(): number {
+    const keys = (this.isKeyDown('KeyW') ? 1 : 0) - (this.isKeyDown('KeyS') ? 1 : 0);
+    return keys !== 0 ? keys : (this.touch?.moveY ?? 0);
+  }
+
+  /** -1..1 strafe axis. */
+  get moveRight(): number {
+    const keys = (this.isKeyDown('KeyD') ? 1 : 0) - (this.isKeyDown('KeyA') ? 1 : 0);
+    return keys !== 0 ? keys : (this.touch?.moveX ?? 0);
+  }
+
+  /** True while the fire stick has been held past its delay. */
+  get isFiring(): boolean {
+    return this.isButtonDown(MOUSE_LEFT) || (this.touch?.firing ?? false);
+  }
+
+  /** True from the moment the fire stick is pressed, so aim can snap early. */
+  get isAiming(): boolean {
+    return this.isButtonDown(MOUSE_RIGHT) || (this.touch?.aiming ?? false);
+  }
+
+  /** Only touch requests assisted aim; a mouse player aims for themselves. */
+  get wantsAimAssist(): boolean {
+    return this.touch?.aiming ?? false;
   }
 
   requestPointerLock(): void {

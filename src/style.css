@@ -525,3 +525,297 @@ canvas {
   color: var(--hud-fg);
   letter-spacing: 0.08em;
 }
+
+/* ---------- Loadout ---------- */
+
+.loadout {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  overflow-y: auto;
+  background: radial-gradient(circle at 50% 30%, rgba(16, 22, 30, 0.9), rgba(4, 6, 9, 0.98));
+}
+
+.loadout--hidden {
+  display: none;
+}
+
+.loadout__title {
+  margin: 0;
+  font-size: clamp(22px, 3.4vw, 34px);
+  letter-spacing: 0.3em;
+}
+
+.loadout__subtitle {
+  font-size: 12px;
+  color: #6c7885;
+  margin-top: -8px;
+  max-width: 520px;
+  line-height: 1.6;
+}
+
+.loadout__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(880px, 94vw);
+}
+
+.loadout__section--hidden {
+  display: none;
+}
+
+.loadout__label {
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  color: var(--hud-dim);
+}
+
+.loadout__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.loadout__card {
+  appearance: none;
+  flex: 1 1 150px;
+  min-width: 140px;
+  padding: 10px 12px;
+  font: inherit;
+  text-align: left;
+  color: var(--hud-fg);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
+}
+
+.loadout__card:hover {
+  border-color: rgba(255, 207, 92, 0.6);
+}
+
+.loadout__card--selected {
+  background: rgba(255, 207, 92, 0.14);
+  border-color: var(--hud-accent);
+}
+
+.loadout__name {
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--hud-accent);
+}
+
+.loadout__category {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--hud-dim);
+  text-transform: uppercase;
+  margin: 2px 0 4px;
+}
+
+.loadout__summary {
+  font-size: 11px;
+  color: #8b97a4;
+  line-height: 1.5;
+}
+
+/* ---------- Zombies HUD ---------- */
+
+.zhud__panel--left {
+  left: 26px;
+  bottom: 24px;
+  min-width: 190px;
+}
+
+.zhud__round {
+  font-size: 19px;
+  letter-spacing: 0.18em;
+  color: #d9534f;
+}
+
+.zhud__points {
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--hud-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.zhud__health {
+  margin-top: 8px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.zhud__health-fill {
+  height: 100%;
+  width: 100%;
+  background: #7dfc9b;
+  transition: width 0.12s linear;
+}
+
+.zhud__health-fill--low {
+  background: #ff5f4e;
+}
+
+.zhud__prompt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 52px);
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  color: var(--hud-accent);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  white-space: nowrap;
+}
+
+.zhud__prompt--visible {
+  opacity: 1;
+}
+
+.zhud__prompt--poor {
+  color: #ff6f5e;
+}
+
+.zhud__banner {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(20px, 3.4vw, 34px);
+  letter-spacing: 0.3em;
+  color: #f0f4f8;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  white-space: nowrap;
+}
+
+.zhud__banner--visible {
+  opacity: 1;
+}
+
+/* ---------- Touch controls ---------- */
+
+.touch {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: none;
+  touch-action: none;
+}
+
+.touch--active {
+  display: block;
+}
+
+.touch__zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+}
+
+.touch__zone--move {
+  left: 0;
+}
+
+/* Drag anywhere on the right to look around. */
+.touch__zone--look {
+  right: 0;
+}
+
+/* The movement stick is invisible until a thumb lands on it. */
+.touch__ring {
+  position: absolute;
+  width: 124px;
+  height: 124px;
+  margin: -62px 0 0 -62px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+.touch__zone--held .touch__ring {
+  opacity: 1;
+}
+
+.touch__knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.touch__button {
+  position: absolute;
+  appearance: none;
+  font: inherit;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  touch-action: none;
+  transition:
+    background 0.1s ease,
+    transform 0.08s ease;
+}
+
+.touch__button--fire {
+  right: 26px;
+  bottom: 30px;
+  width: 108px;
+  height: 108px;
+  font-size: 13px;
+  background: rgba(255, 207, 92, 0.16);
+  border-color: rgba(255, 207, 92, 0.45);
+  color: rgba(255, 231, 168, 0.95);
+}
+
+.touch__button--held {
+  transform: scale(0.94);
+  background: rgba(255, 207, 92, 0.3);
+}
+
+.touch__button--firing {
+  background: rgba(255, 92, 74, 0.42);
+  border-color: rgba(255, 130, 110, 0.8);
+}
+
+.touch__button--swap {
+  right: 150px;
+  bottom: 46px;
+  width: 72px;
+  height: 72px;
+  font-size: 11px;
+}
+
+.touch__button--exit {
+  left: 20px;
+  top: 20px;
+  width: 62px;
+  height: 62px;
+  font-size: 11px;
+  border-radius: 8px;
+}

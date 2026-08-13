@@ -1,101 +1,139 @@
 import * as THREE from 'three';
 import type { BoxObstacle } from '../range/ShootingRange';
-import type { GroundSampler } from '../player/Player';
-import { PLAYER } from '../core/constants';
-import { createNoiseTexture } from '../rendering/textures';
+import type { RandomSource } from '../utils/Random';
+import { WEAPONS_BY_ID } from '../weapons/definitions';
+import {
+  createWeaponMaterials,
+  disposeWeaponMaterials,
+  type WeaponMaterials,
+} from '../weapons/viewmodel/WeaponModelFactory';
 import { Barrier, type BarrierConfig } from './Barrier';
+import { MansionWindow } from './MansionWindow';
+import { WallBuy } from './WallBuy';
+import {
+  BOX_ROOMS,
+  DOORWAYS,
+  PARTITIONS,
+  PERIMETER,
+  PLAYER_SPAWN,
+  ROOMS,
+  WALL_BUYS,
+  WALL_HEIGHT,
+  WALL_THICKNESS,
+  WINDOWS,
+  WINDOW_HEAD,
+  WINDOW_SILL,
+  roomAt,
+  roomById,
+  roomCentre,
+  wallMount,
+  type DoorwaySpec,
+  type WallSpec,
+  type WindowSpec,
+} from './layout';
+import { buildMansionNavigation } from './navigation';
 import { NavGraph } from './NavGraph';
-
-/** Storey heights. Three interior floors plus the roof terrace. */
-export const FLOOR_Y = [0, 4.2, 8.4, 12.6] as const;
-
-interface Surface {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-  y: number;
-  /** Set for ramps: height at maxZ (or maxX) when the surface slopes. */
-  yHigh?: number;
-  along?: 'x' | 'z';
-}
-
-const HALF_W = 17;
-const HALF_D = 13;
-const WALL_H = 3.4;
+import { createFloorTexture, createWallTexture } from './textures';
 
 /**
- * Procedural modern mansion: three interior storeys and a roof terrace,
- * connected by ramped staircases. Rooms are laid out for zombie gameplay —
- * loops, a couple of choke points and several defendable corners — and each
- * area past the entry is gated by a paid barrier.
+ * Segment of wall left after doorways and windows are cut out of a run. The
+ * vertical extent matters: a window leaves a solid sill below it and a solid
+ * header above it, both of which are still real geometry.
  */
-export class Mansion implements GroundSampler {
+export interface WallPiece {
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+  y1: number;
+  y2: number;
+}
+
+const CEILING_Y = WALL_HEIGHT;
+
+/**
+ * The mansion: one flat, fully enclosed storey generated from
+ * {@link ROOMS}, {@link PARTITIONS}, {@link DOORWAYS} and {@link WINDOWS}.
+ *
+ * Geometry, player collision and the navigation graph are all built from that
+ * same plan, so a wall always blocks what it looks like it blocks and a
+ * navigation edge always follows a real opening. The only routes in from
+ * outside are the windows, and the only routes deeper in are the doorways.
+ */
+export class Mansion {
   readonly group = new THREE.Group();
-  /** Everything bullets can hit. */
   readonly colliders: THREE.Object3D[] = [];
-  /** Axis aligned blockers for player movement. */
   readonly obstacles: BoxObstacle[] = [];
   readonly barriers: Barrier[] = [];
-  readonly nav = new NavGraph(320);
-  readonly playerSpawn = new THREE.Vector3(0, FLOOR_Y[0], HALF_D - 3);
-  readonly packAPunchPosition = new THREE.Vector3(0, FLOOR_Y[3], -6);
-
-  /** Zombie spawn nodes, grouped by the zone that must be open. */
+  readonly windows: MansionWindow[] = [];
+  readonly wallBuys: WallBuy[] = [];
+  readonly nav = new NavGraph(384);
+  readonly playerSpawn = new THREE.Vector3(PLAYER_SPAWN.x, 0, PLAYER_SPAWN.z);
+  /** Lawn nodes zombies walk on from; all of them are outside the building. */
   readonly spawnNodes: number[] = [];
+  /** Where the mystery box landed this match. */
+  readonly boxRoom: string;
+  readonly boxPosition = new THREE.Vector3();
 
-  private readonly surfaces: Surface[] = [];
   private readonly materials: THREE.Material[] = [];
+  private readonly textures: THREE.Texture[] = [];
+  private readonly weaponMaterials: WeaponMaterials = createWeaponMaterials();
   private readonly barrierById = new Map<string, Barrier>();
+  private readonly windowById = new Map<string, MansionWindow>();
+  private elapsed = 0;
 
-  constructor(scene: THREE.Scene) {
-    const concrete = this.material(new THREE.MeshLambertMaterial({
-      map: createNoiseTexture('#d8d6d0', 10, 6),
-    }));
-    const floorMaterial = this.material(new THREE.MeshLambertMaterial({
-      map: createNoiseTexture('#8d8a85', 12, 10),
-    }));
-    const accent = this.material(new THREE.MeshLambertMaterial({ color: 0x3a3f45 }));
-    const glass = this.material(new THREE.MeshPhongMaterial({
-      color: 0x9fc4dd,
-      transparent: true,
-      opacity: 0.22,
-      shininess: 90,
-    }));
-    const panel = this.material(new THREE.MeshLambertMaterial({ color: 0x6c7176 }));
+  constructor(scene: THREE.Scene, random: RandomSource = Math.random) {
+    const wallMaterial = this.material(
+      new THREE.MeshLambertMaterial({ map: this.texture(createWallTexture()) }),
+    );
+    const trimMaterial = this.material(new THREE.MeshLambertMaterial({ color: 0x2b2f36 }));
+    const ceilingMaterial = this.material(new THREE.MeshLambertMaterial({ color: 0x1b1f25 }));
+    const boardMaterial = this.material(new THREE.MeshLambertMaterial({ color: 0x6b4b2a }));
 
-    this.buildShell(concrete, floorMaterial, glass);
-    this.buildFloorOne(concrete, accent);
-    this.buildFloorTwo(concrete, accent);
-    this.buildFloorThree(concrete, accent);
-    this.buildTerrace(concrete, accent);
-    this.buildBarriers({ panel, frame: accent });
-    this.buildNavigation();
+    this.buildGround();
+    this.buildFloors();
+    this.buildCeiling(ceilingMaterial);
+    this.buildWalls(wallMaterial);
+    this.buildWindows({ board: boardMaterial, frame: trimMaterial });
+    this.buildBarriers({ panel: trimMaterial, frame: trimMaterial });
+    this.buildWallBuys();
+
+    const navigation = buildMansionNavigation(this.nav);
+    this.spawnNodes.push(...navigation.spawnNodes);
+
+    const box = pickBoxRoom(random);
+    this.boxRoom = box.room;
+    this.boxPosition.set(box.x, 0, box.z);
+    // The crate is solid: you walk around it, not through it.
+    this.obstacles.push({
+      minX: box.x - 0.72,
+      maxX: box.x + 0.72,
+      minZ: box.z - 0.52,
+      maxZ: box.z + 0.52,
+    });
 
     scene.add(this.group);
   }
 
-  // ---------------------------------------------------------------- surfaces
-
-  /** Highest floor at or just above the walker's feet; null when out of bounds. */
-  sampleHeight(x: number, z: number, currentY: number): number | null {
-    let best: number | null = null;
-    let lowest: number | null = null;
-    const ceiling = currentY + PLAYER.stepHeight;
-
-    for (const surface of this.surfaces) {
-      if (x < surface.minX || x > surface.maxX || z < surface.minZ || z > surface.maxZ) continue;
-      const height = surfaceHeight(surface, x, z);
-      if (lowest === null || height < lowest) lowest = height;
-      if (height <= ceiling && (best === null || height > best)) best = height;
-    }
-    return best ?? lowest;
+  /** The map is flat, so the walkable height is always the ground. */
+  get floorHeight(): number {
+    return 0;
   }
 
   isBarrierOpen = (id: string): boolean => this.barrierById.get(id)?.isOpen ?? true;
 
+  /** True when the nav zone is a window that still has planks across it. */
+  isEntryBoarded = (zone: string): boolean => this.windowById.get(zone)?.isBoarded ?? false;
+
+  /** Pulls one plank off a window. @returns true when one came away. */
+  tearEntry = (zone: string): boolean => this.windowById.get(zone)?.tearBoard() ?? false;
+
   barrier(id: string): Barrier | undefined {
     return this.barrierById.get(id);
+  }
+
+  window(id: string): MansionWindow | undefined {
+    return this.windowById.get(id);
   }
 
   /** Colliders that currently stop bullets, including closed barriers. */
@@ -108,292 +146,188 @@ export class Mansion implements GroundSampler {
     return target;
   }
 
-  update(dt: number): void {
+  /** Blockers the player collides with: walls plus every shut barrier. */
+  collectObstacles(target: BoxObstacle[]): BoxObstacle[] {
+    target.length = 0;
+    target.push(...this.obstacles);
+    for (const barrier of this.barriers) {
+      if (barrier.isOpen) continue;
+      const box = this.barrierBox(barrier.id);
+      if (box) target.push(box);
+    }
+    return target;
+  }
+
+  update(dt: number, highlightedBuy: string | null = null): void {
+    this.elapsed += dt;
     for (const barrier of this.barriers) barrier.update(dt);
+    for (const buy of this.wallBuys) buy.update(dt, buy.id === highlightedBuy, this.elapsed);
   }
 
   dispose(): void {
     for (const barrier of this.barriers) barrier.dispose();
+    for (const window of this.windows) window.dispose();
+    for (const buy of this.wallBuys) buy.dispose();
     this.barriers.length = 0;
+    this.windows.length = 0;
+    this.wallBuys.length = 0;
     this.barrierById.clear();
+    this.windowById.clear();
     this.group.traverse((object) => {
       const mesh = object as THREE.Mesh;
       if (mesh.isMesh) mesh.geometry.dispose();
     });
     for (const material of this.materials) material.dispose();
+    for (const texture of this.textures) texture.dispose();
+    disposeWeaponMaterials(this.weaponMaterials);
     this.materials.length = 0;
+    this.textures.length = 0;
     this.group.removeFromParent();
     this.colliders.length = 0;
     this.obstacles.length = 0;
   }
 
-  // ---------------------------------------------------------------- building
+  /** Shared weapon materials, so props elsewhere reuse one set. */
+  get propMaterials(): WeaponMaterials {
+    return this.weaponMaterials;
+  }
+
+  // ---------------------------------------------------------------- geometry
 
   private material<T extends THREE.Material>(value: T): T {
     this.materials.push(value);
     return value;
   }
 
-  /** Solid box that blocks bullets and movement. */
-  private wall(
-    material: THREE.Material,
-    width: number,
-    height: number,
-    depth: number,
-    x: number,
-    y: number,
-    z: number,
-  ): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-    mesh.position.set(x, y + height / 2, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.matrixAutoUpdate = false;
-    mesh.updateMatrix();
-    this.group.add(mesh);
-    this.colliders.push(mesh);
+  private texture(value: THREE.Texture): THREE.Texture {
+    this.textures.push(value);
+    return value;
+  }
+
+  private buildGround(): void {
+    // Grounds the building in a site rather than floating in the void, and
+    // gives the horde somewhere real to walk in from.
+    const groundMaterial = this.material(
+      new THREE.MeshLambertMaterial({ map: this.texture(createFloorTexture('concrete', 40)) }),
+    );
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.06;
+    ground.receiveShadow = true;
+    this.group.add(ground);
+    this.colliders.push(ground);
+  }
+
+  /** One slab per room, each with the flooring that fits the room. */
+  private buildFloors(): void {
+    for (const room of ROOMS) {
+      const width = room.maxX - room.minX;
+      const depth = room.maxZ - room.minZ;
+      const material = this.material(
+        new THREE.MeshLambertMaterial({
+          map: this.texture(createFloorTexture(room.floor, Math.max(width, depth) / 2.4)),
+        }),
+      );
+      const slab = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), material);
+      slab.rotation.x = -Math.PI / 2;
+      slab.position.set(room.minX + width / 2, 0, room.minZ + depth / 2);
+      slab.receiveShadow = true;
+      slab.matrixAutoUpdate = false;
+      slab.updateMatrix();
+      this.group.add(slab);
+      this.colliders.push(slab);
+    }
+  }
+
+  private buildCeiling(material: THREE.Material): void {
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), material);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(0, CEILING_Y, -4);
+    ceiling.matrixAutoUpdate = false;
+    ceiling.updateMatrix();
+    this.group.add(ceiling);
+    this.colliders.push(ceiling);
+  }
+
+  /**
+   * Turns every wall run into solid pieces.
+   *
+   * The two cuts do different jobs and are deliberately kept apart. Doorways
+   * are cut from the footprint, so they let the player and bullets through.
+   * Windows are then cut out of each footprint piece vertically, so they let
+   * bullets and zombies through while the solid sill below still blocks the
+   * player: the collision box comes from before the window cut, the meshes
+   * from after it.
+   */
+  private buildWalls(material: THREE.Material): void {
+    for (const wall of [...PERIMETER, ...PARTITIONS]) {
+      for (const footprint of cutDoorways(wall, DOORWAYS)) {
+        this.addObstacle(footprint);
+        for (const piece of cutWindows(footprint, WINDOWS)) this.addWallMesh(piece, material);
+      }
+    }
+  }
+
+  private addObstacle(piece: WallPiece): void {
+    const { x, z, width, depth, length } = pieceBounds(piece);
+    if (length < 0.05) return;
     this.obstacles.push({
       minX: x - width / 2,
       maxX: x + width / 2,
       minZ: z - depth / 2,
       maxZ: z + depth / 2,
     });
-    return mesh;
   }
 
-  /** Walkable slab: renders, blocks bullets and registers as standable. */
-  private slab(
-    material: THREE.Material,
-    minX: number,
-    maxX: number,
-    minZ: number,
-    maxZ: number,
-    y: number,
-  ): void {
-    const width = maxX - minX;
-    const depth = maxZ - minZ;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.3, depth), material);
-    mesh.position.set(minX + width / 2, y - 0.15, minZ + depth / 2);
+  private addWallMesh(piece: WallPiece, material: THREE.Material): void {
+    const { x, z, width, depth, length } = pieceBounds(piece);
+    const height = piece.y2 - piece.y1;
+    if (length < 0.05 || height < 0.02) return;
+
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+    mesh.position.set(x, piece.y1 + height / 2, z);
+    mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
     this.group.add(mesh);
     this.colliders.push(mesh);
-    this.surfaces.push({ minX, maxX, minZ, maxZ, y });
   }
 
-  /** Ramped staircase with visual treads. Ramps avoid step climbing logic. */
-  private stair(
-    material: THREE.Material,
-    accent: THREE.Material,
-    minX: number,
-    maxX: number,
-    minZ: number,
-    maxZ: number,
-    yLow: number,
-    yHigh: number,
-  ): void {
-    const width = maxX - minX;
-    const depth = maxZ - minZ;
-    const rise = yHigh - yLow;
-    const length = Math.hypot(depth, rise);
-
-    const ramp = new THREE.Mesh(new THREE.BoxGeometry(width, 0.25, length), material);
-    ramp.position.set(minX + width / 2, yLow + rise / 2 - 0.12, minZ + depth / 2);
-    ramp.rotation.x = -Math.atan2(rise, depth);
-    ramp.receiveShadow = true;
-    this.group.add(ramp);
-    this.colliders.push(ramp);
-
-    // Treads, purely visual, instanced so the detail is one draw call.
-    const steps = Math.max(6, Math.round(rise / 0.19));
-    const tread = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(width * 0.98, 0.05, depth / steps),
-      accent,
-      steps,
-    );
-    const matrix = new THREE.Matrix4();
-    for (let i = 0; i < steps; i++) {
-      const t = (i + 0.5) / steps;
-      matrix.makeTranslation(
-        minX + width / 2,
-        yLow + rise * t + 0.02,
-        minZ + depth * t,
+  private buildWindows(materials: { board: THREE.Material; frame: THREE.Material }): void {
+    for (const spec of WINDOWS) {
+      const window = new MansionWindow(
+        {
+          id: spec.id,
+          room: spec.room,
+          position: new THREE.Vector3(spec.x, 0, spec.z),
+          axis: spec.axis,
+          width: spec.width,
+          outward: new THREE.Vector3(spec.outward[0], 0, spec.outward[1]),
+        },
+        materials,
       );
-      tread.setMatrixAt(i, matrix);
+      this.windows.push(window);
+      this.windowById.set(spec.id, window);
+      this.group.add(window.group);
     }
-    tread.instanceMatrix.needsUpdate = true;
-    this.group.add(tread);
-
-    this.surfaces.push({ minX, maxX, minZ, maxZ, y: yLow, yHigh, along: 'z' });
-  }
-
-  private buildShell(
-    concrete: THREE.Material,
-    floorMaterial: THREE.Material,
-    glass: THREE.Material,
-  ): void {
-    // Ground plane around the building so falling off has somewhere to land.
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), floorMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.2;
-    ground.receiveShadow = true;
-    this.group.add(ground);
-    this.colliders.push(ground);
-
-    for (let level = 0; level < FLOOR_Y.length; level++) {
-      const y = FLOOR_Y[level];
-      // Perimeter walls. The terrace gets a low parapet instead.
-      const height = level === 3 ? 1.15 : WALL_H;
-      this.wall(concrete, HALF_W * 2, height, 0.4, 0, y, -HALF_D);
-      this.wall(concrete, HALF_W * 2, height, 0.4, 0, y, HALF_D);
-      this.wall(concrete, 0.4, height, HALF_D * 2, -HALF_W, y, 0);
-      this.wall(concrete, 0.4, height, HALF_D * 2, HALF_W, y, 0);
-    }
-
-    // Floor slabs with a void where the stairwell passes through.
-    for (let level = 0; level < FLOOR_Y.length; level++) {
-      const y = FLOOR_Y[level];
-      this.slab(floorMaterial, -HALF_W, HALF_W, -HALF_D, 4, y);
-      this.slab(floorMaterial, -HALF_W, 4, 4, HALF_D, y);
-      // Right hand strip is the stairwell: only the landing is solid.
-      this.slab(floorMaterial, 4, HALF_W, 10, HALF_D, y);
-    }
-
-    // Full height glazing on the long faces: modern, and keeps sight lines.
-    for (let level = 0; level < 3; level++) {
-      const y = FLOOR_Y[level];
-      const pane = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2 - 1, WALL_H - 0.6), glass);
-      pane.position.set(0, y + WALL_H / 2, -HALF_D + 0.25);
-      this.group.add(pane);
-    }
-  }
-
-  private buildFloorOne(concrete: THREE.Material, accent: THREE.Material): void {
-    const y = FLOOR_Y[0];
-    // Entry hall divider with the doorway to the lounge.
-    this.wall(concrete, 9, WALL_H, 0.3, -12, y, 4);
-    this.wall(concrete, 9, WALL_H, 0.3, 8, y, 4);
-    // Kitchen block.
-    this.wall(concrete, 0.3, WALL_H, 9, -6, y, -8);
-    this.wall(concrete, 7, WALL_H, 0.3, -12, y, -4);
-    // Dining counter, low cover in the open plan area.
-    this.wall(accent, 6, 1.05, 0.7, 6, y, -4);
-    this.stair(concrete, accent, 6, 12, 4, 12, FLOOR_Y[0], FLOOR_Y[1]);
-  }
-
-  private buildFloorTwo(concrete: THREE.Material, accent: THREE.Material): void {
-    const y = FLOOR_Y[1];
-    // Corridor spine with two bedrooms off it.
-    this.wall(concrete, 0.3, WALL_H, 12, -2, y, -6);
-    this.wall(concrete, 10, WALL_H, 0.3, -11, y, -2);
-    this.wall(concrete, 0.3, WALL_H, 8, -11, y, -9);
-    // Open mezzanine railing over the entry.
-    this.wall(accent, 12, 1.05, 0.25, 8, y, 3.5);
-    this.stair(concrete, accent, 6, 12, 4, 12, FLOOR_Y[1], FLOOR_Y[2]);
-  }
-
-  private buildFloorThree(concrete: THREE.Material, accent: THREE.Material): void {
-    const y = FLOOR_Y[2];
-    // One big combat hall with a couple of columns for cover and loops.
-    this.wall(concrete, 0.3, WALL_H, 10, 0, y, -7);
-    this.wall(accent, 1, WALL_H, 1, -9, y, -6);
-    this.wall(accent, 1, WALL_H, 1, -9, y, 1);
-    this.stair(concrete, accent, 6, 12, 4, 12, FLOOR_Y[2], FLOOR_Y[3]);
-  }
-
-  private buildTerrace(concrete: THREE.Material, accent: THREE.Material): void {
-    const y = FLOOR_Y[3];
-    // Pergola frame around the Pack-a-Punch, plus a windbreak.
-    this.wall(accent, 0.3, 2.6, 0.3, -3, y, -9);
-    this.wall(accent, 0.3, 2.6, 0.3, 3, y, -9);
-    this.wall(accent, 0.3, 2.6, 0.3, -3, y, -3);
-    this.wall(accent, 0.3, 2.6, 0.3, 3, y, -3);
-    this.wall(concrete, 8, 1.4, 0.3, -10, y, -6);
   }
 
   private buildBarriers(materials: { panel: THREE.Material; frame: THREE.Material }): void {
-    const configs: BarrierConfig[] = [
-      {
-        id: 'lounge',
-        kind: 'door',
-        cost: 750,
-        label: 'LOUNGE',
-        unlocks: 'lounge',
-        position: new THREE.Vector3(-3.5, FLOOR_Y[0], 4),
-        rotationY: 0,
-        width: 2.4,
-        height: 2.6,
-      },
-      {
-        id: 'kitchen',
-        kind: 'double-door',
-        cost: 1000,
-        label: 'KITCHEN',
-        unlocks: 'kitchen',
-        position: new THREE.Vector3(-6, FLOOR_Y[0], -2),
-        rotationY: Math.PI / 2,
-        width: 2.8,
-        height: 2.6,
-      },
-      {
-        id: 'stair-a',
-        kind: 'debris',
-        cost: 1250,
-        label: 'STAIRWELL',
-        unlocks: 'stair-a',
-        position: new THREE.Vector3(9, FLOOR_Y[0], 4.2),
-        rotationY: 0,
-        width: 5.6,
-        height: 2.8,
-      },
-      {
-        id: 'bedrooms',
-        kind: 'double-door',
-        cost: 1500,
-        label: 'BEDROOMS',
-        unlocks: 'bedrooms',
-        position: new THREE.Vector3(-6, FLOOR_Y[1], -2),
-        rotationY: 0,
-        width: 2.8,
-        height: 2.6,
-      },
-      {
-        id: 'stair-b',
-        kind: 'debris',
-        cost: 1750,
-        label: 'UPPER STAIRS',
-        unlocks: 'stair-b',
-        position: new THREE.Vector3(9, FLOOR_Y[1], 4.2),
-        rotationY: 0,
-        width: 5.6,
-        height: 2.8,
-      },
-      {
-        id: 'loft',
-        kind: 'door',
-        cost: 2000,
-        label: 'LOFT',
-        unlocks: 'loft',
-        position: new THREE.Vector3(0, FLOOR_Y[2], -1.6),
-        rotationY: Math.PI / 2,
-        width: 2.6,
-        height: 2.6,
-      },
-      {
-        id: 'terrace',
-        kind: 'debris',
-        cost: 2500,
-        label: 'TERRACE',
-        unlocks: 'terrace',
-        position: new THREE.Vector3(9, FLOOR_Y[2], 4.2),
-        rotationY: 0,
-        width: 5.6,
-        height: 2.8,
-      },
-    ];
-
-    for (const config of configs) {
+    for (const doorway of DOORWAYS) {
+      if (!doorway.barrier) continue;
+      const config: BarrierConfig = {
+        id: doorway.id,
+        kind: doorway.barrier.kind,
+        cost: doorway.barrier.cost,
+        label: doorway.barrier.label,
+        unlocks: doorway.between[1],
+        position: new THREE.Vector3(doorway.x, 0, doorway.z),
+        // A doorway lying along X needs a barrier facing across it.
+        rotationY: doorway.axis === 'x' ? 0 : Math.PI / 2,
+        width: doorway.width,
+        height: WALL_HEIGHT - 0.6,
+      };
       const barrier = new Barrier(config, materials);
       this.barriers.push(barrier);
       this.barrierById.set(config.id, barrier);
@@ -401,114 +335,165 @@ export class Mansion implements GroundSampler {
     }
   }
 
-  /**
-   * Waypoint graph. Edges through a doorway carry that barrier's id, so a
-   * closed barrier removes the route entirely rather than relying on
-   * collision to stop zombies.
-   */
-  private buildNavigation(): void {
-    const nav = this.nav;
-    const add = (x: number, y: number, z: number, zone: string): number =>
-      nav.addNode(new THREE.Vector3(x, y, z), zone);
-
-    // Floor one.
-    const entry = add(0, FLOOR_Y[0], 9, 'entry');
-    const entryWest = add(-10, FLOOR_Y[0], 9, 'entry');
-    const entryEast = add(11, FLOOR_Y[0], 9, 'entry');
-    const loungeDoor = add(-3.5, FLOOR_Y[0], 4, 'entry');
-    const lounge = add(-4, FLOOR_Y[0], 0, 'lounge');
-    const loungeWest = add(-12, FLOOR_Y[0], 0, 'lounge');
-    const loungeNorth = add(-2, FLOOR_Y[0], -8, 'lounge');
-    const kitchenDoor = add(-6, FLOOR_Y[0], -2, 'lounge');
-    const kitchen = add(-11, FLOOR_Y[0], -7, 'kitchen');
-    const kitchenNorth = add(-13, FLOOR_Y[0], -11, 'kitchen');
-    const dining = add(7, FLOOR_Y[0], -7, 'lounge');
-    const stairADoor = add(9, FLOOR_Y[0], 4.2, 'entry');
-
-    nav.connect(entry, entryWest);
-    nav.connect(entry, entryEast);
-    nav.connect(entry, loungeDoor);
-    nav.connect(loungeDoor, lounge, 'lounge');
-    nav.connect(lounge, loungeWest);
-    nav.connect(lounge, loungeNorth);
-    nav.connect(loungeNorth, dining);
-    nav.connect(lounge, kitchenDoor);
-    nav.connect(kitchenDoor, kitchen, 'kitchen');
-    nav.connect(kitchen, kitchenNorth);
-    nav.connect(entryEast, stairADoor);
-
-    // Stairwell up to floor two.
-    const stairAMid = add(9, (FLOOR_Y[0] + FLOOR_Y[1]) / 2, 8, 'stair-a');
-    const landing2 = add(9, FLOOR_Y[1], 11.5, 'stair-a');
-    nav.connect(stairADoor, stairAMid, 'stair-a');
-    nav.connect(stairAMid, landing2);
-
-    // Floor two.
-    const hall2 = add(4, FLOOR_Y[1], 6, 'stair-a');
-    const hall2West = add(-6, FLOOR_Y[1], 6, 'stair-a');
-    const mezzanine = add(2, FLOOR_Y[1], 0, 'stair-a');
-    const bedroomDoor = add(-6, FLOOR_Y[1], -2, 'stair-a');
-    const bedroomA = add(-11, FLOOR_Y[1], -6, 'bedrooms');
-    const bedroomB = add(-6, FLOOR_Y[1], -10, 'bedrooms');
-    const stairBDoor = add(9, FLOOR_Y[1], 4.2, 'stair-a');
-
-    nav.connect(landing2, hall2);
-    nav.connect(hall2, hall2West);
-    nav.connect(hall2, mezzanine);
-    nav.connect(hall2West, bedroomDoor);
-    nav.connect(bedroomDoor, bedroomA, 'bedrooms');
-    nav.connect(bedroomA, bedroomB);
-    nav.connect(hall2, stairBDoor);
-
-    // Stairwell up to floor three.
-    const stairBMid = add(9, (FLOOR_Y[1] + FLOOR_Y[2]) / 2, 8, 'stair-b');
-    const landing3 = add(9, FLOOR_Y[2], 11.5, 'stair-b');
-    nav.connect(stairBDoor, stairBMid, 'stair-b');
-    nav.connect(stairBMid, landing3);
-
-    // Floor three: one open combat hall.
-    const hall3 = add(4, FLOOR_Y[2], 6, 'stair-b');
-    const loftDoor = add(0, FLOOR_Y[2], -1.6, 'stair-b');
-    const loftWest = add(-9, FLOOR_Y[2], -4, 'loft');
-    const loftNorth = add(-6, FLOOR_Y[2], -10, 'loft');
-    const terraceDoor = add(9, FLOOR_Y[2], 4.2, 'stair-b');
-
-    nav.connect(landing3, hall3);
-    nav.connect(hall3, loftDoor);
-    nav.connect(loftDoor, loftWest, 'loft');
-    nav.connect(loftWest, loftNorth);
-    nav.connect(hall3, terraceDoor);
-
-    // Terrace.
-    const terraceMid = add(9, (FLOOR_Y[2] + FLOOR_Y[3]) / 2, 8, 'terrace');
-    const terrace = add(9, FLOOR_Y[3], 11.5, 'terrace');
-    const terraceWest = add(0, FLOOR_Y[3], 2, 'terrace');
-    const papNode = add(0, FLOOR_Y[3], -6, 'terrace');
-    nav.connect(terraceDoor, terraceMid, 'terrace');
-    nav.connect(terraceMid, terrace);
-    nav.connect(terrace, terraceWest);
-    nav.connect(terraceWest, papNode);
-
-    // Zombies come in from the outer edges of each unlocked area.
-    this.spawnNodes.push(
-      entryWest,
-      entryEast,
-      loungeWest,
-      loungeNorth,
-      kitchenNorth,
-      dining,
-      bedroomB,
-      loftNorth,
-      papNode,
-    );
+  private buildWallBuys(): void {
+    for (const spec of WALL_BUYS) {
+      const mount = wallMount(roomById(spec.room), spec.side, spec.along);
+      const weapon = spec.weapon ? WEAPONS_BY_ID[spec.weapon] : null;
+      const buy = new WallBuy(spec, mount, weapon, this.weaponMaterials);
+      this.wallBuys.push(buy);
+      this.group.add(buy.group);
+    }
   }
+
+  /** Player sized blocker filling a shut doorway. */
+  private barrierBox(id: string): BoxObstacle | null {
+    const doorway = DOORWAYS.find((candidate) => candidate.id === id);
+    if (!doorway) return null;
+    const half = doorway.width / 2;
+    if (doorway.axis === 'x') {
+      return {
+        minX: doorway.x - half,
+        maxX: doorway.x + half,
+        minZ: doorway.z - WALL_THICKNESS / 2,
+        maxZ: doorway.z + WALL_THICKNESS / 2,
+      };
+    }
+    return {
+      minX: doorway.x - WALL_THICKNESS / 2,
+      maxX: doorway.x + WALL_THICKNESS / 2,
+      minZ: doorway.z - half,
+      maxZ: doorway.z + half,
+    };
+  }
+
 }
 
-function surfaceHeight(surface: Surface, x: number, z: number): number {
-  if (surface.yHigh === undefined) return surface.y;
-  const t =
-    surface.along === 'x'
-      ? (x - surface.minX) / (surface.maxX - surface.minX)
-      : (z - surface.minZ) / (surface.maxZ - surface.minZ);
-  return surface.y + (surface.yHigh - surface.y) * Math.min(1, Math.max(0, t));
+function pieceBounds(piece: WallPiece): {
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  length: number;
+} {
+  const horizontal = Math.abs(piece.x2 - piece.x1) > Math.abs(piece.z2 - piece.z1);
+  const length = horizontal ? Math.abs(piece.x2 - piece.x1) : Math.abs(piece.z2 - piece.z1);
+  return {
+    x: (piece.x1 + piece.x2) / 2,
+    z: (piece.z1 + piece.z2) / 2,
+    width: horizontal ? length : WALL_THICKNESS,
+    depth: horizontal ? WALL_THICKNESS : length,
+    length,
+  };
 }
+
+/** Picks the room the mystery box lands in, and a clear spot inside it. */
+export function pickBoxRoom(random: RandomSource = Math.random): {
+  room: string;
+  x: number;
+  z: number;
+} {
+  const index = Math.min(BOX_ROOMS.length - 1, Math.floor(random() * BOX_ROOMS.length));
+  const room = roomById(BOX_ROOMS[index]);
+  const centre = roomCentre(room);
+  // Offset toward a corner so the box is not standing in the doorway lane.
+  return {
+    room: room.id,
+    x: centre.x + (room.maxX - room.minX) * 0.22,
+    z: centre.z + (room.maxZ - room.minZ) * 0.22,
+  };
+}
+
+/**
+ * Splits a wall run wherever a doorway crosses it, returning the solid pieces
+ * either side. A doorway counts as crossing when it lies on the run's line and
+ * within its extent.
+ */
+export function cutDoorways(
+  wall: WallSpec,
+  doorways: readonly DoorwaySpec[],
+): readonly WallPiece[] {
+  const horizontal = Math.abs(wall.x2 - wall.x1) > Math.abs(wall.z2 - wall.z1);
+  const start = horizontal ? Math.min(wall.x1, wall.x2) : Math.min(wall.z1, wall.z2);
+  const end = horizontal ? Math.max(wall.x1, wall.x2) : Math.max(wall.z1, wall.z2);
+  const fixed = horizontal ? wall.z1 : wall.x1;
+
+  // Openings along this run, as [from, to] spans.
+  const gaps: Array<[number, number]> = [];
+  for (const doorway of doorways) {
+    const doorFixed = horizontal ? doorway.z : doorway.x;
+    const doorAlong = horizontal ? doorway.x : doorway.z;
+    if (Math.abs(doorFixed - fixed) > 0.01) continue;
+    if (doorAlong <= start || doorAlong >= end) continue;
+    gaps.push([doorAlong - doorway.width / 2, doorAlong + doorway.width / 2]);
+  }
+  gaps.sort((a, b) => a[0] - b[0]);
+
+  const pieces: WallPiece[] = [];
+  let cursor = start;
+  for (const [from, to] of gaps) {
+    if (from > cursor) pieces.push(makePiece(horizontal, fixed, cursor, from));
+    cursor = Math.max(cursor, to);
+  }
+  if (cursor < end) pieces.push(makePiece(horizontal, fixed, cursor, end));
+  return pieces;
+}
+
+/**
+ * Cuts window openings out of a wall piece, vertically.
+ *
+ * Each window leaves four solids: the wall either side of it, the sill under
+ * it and the header over it. Because only the meshes are cut this way, the
+ * hole is see-through and shoot-through while the player's collision box for
+ * this run stays whole.
+ */
+export function cutWindows(
+  piece: WallPiece,
+  windows: readonly WindowSpec[],
+): readonly WallPiece[] {
+  const horizontal = Math.abs(piece.x2 - piece.x1) > Math.abs(piece.z2 - piece.z1);
+  const start = horizontal ? Math.min(piece.x1, piece.x2) : Math.min(piece.z1, piece.z2);
+  const end = horizontal ? Math.max(piece.x1, piece.x2) : Math.max(piece.z1, piece.z2);
+  const fixed = horizontal ? piece.z1 : piece.x1;
+
+  const gaps: Array<[number, number]> = [];
+  for (const window of windows) {
+    const windowFixed = horizontal ? window.z : window.x;
+    const windowAlong = horizontal ? window.x : window.z;
+    if (Math.abs(windowFixed - fixed) > 0.01) continue;
+    const from = windowAlong - window.width / 2;
+    const to = windowAlong + window.width / 2;
+    if (to <= start || from >= end) continue;
+    gaps.push([Math.max(start, from), Math.min(end, to)]);
+  }
+  if (gaps.length === 0) return [piece];
+  gaps.sort((a, b) => a[0] - b[0]);
+
+  const pieces: WallPiece[] = [];
+  let cursor = start;
+  for (const [from, to] of gaps) {
+    if (from > cursor) {
+      pieces.push(makePiece(horizontal, fixed, cursor, from, piece.y1, piece.y2));
+    }
+    // Sill under the opening and header over it, both full thickness.
+    pieces.push(makePiece(horizontal, fixed, from, to, piece.y1, Math.min(piece.y2, WINDOW_SILL)));
+    pieces.push(makePiece(horizontal, fixed, from, to, Math.max(piece.y1, WINDOW_HEAD), piece.y2));
+    cursor = Math.max(cursor, to);
+  }
+  if (cursor < end) pieces.push(makePiece(horizontal, fixed, cursor, end, piece.y1, piece.y2));
+  return pieces.filter((candidate) => candidate.y2 - candidate.y1 > 0.02);
+}
+
+function makePiece(
+  horizontal: boolean,
+  fixed: number,
+  from: number,
+  to: number,
+  y1 = 0,
+  y2 = WALL_HEIGHT,
+): WallPiece {
+  return horizontal
+    ? { x1: from, z1: fixed, x2: to, z2: fixed, y1, y2 }
+    : { x1: fixed, z1: from, x2: fixed, z2: to, y1, y2 };
+}
+
+export { roomAt, ROOMS };

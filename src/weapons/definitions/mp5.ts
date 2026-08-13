@@ -11,6 +11,7 @@ export const MP5: WeaponDefinition = {
   fireModes: ['auto', 'semi'],
   rpm: 800,
   magazineSize: 30,
+  reserveAmmo: 240,
   reloadTime: 2.6,
   equipTime: 0.5,
   recoil: {
