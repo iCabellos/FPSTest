@@ -65,6 +65,5 @@ export const M9: WeaponDefinition = {
     decay: 0.1,
     tailDecay: 0.28,
     mechanical: 0.7,
-    reverb: 0.38,
   },
 };

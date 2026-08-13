@@ -62,6 +62,5 @@ export const SPAS12: WeaponDefinition = {
     decay: 0.24,
     tailDecay: 0.72,
     mechanical: 0.78,
-    reverb: 0.82,
   },
 };

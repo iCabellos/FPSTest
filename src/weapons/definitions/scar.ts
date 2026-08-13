@@ -54,6 +54,5 @@ export const SCAR: WeaponDefinition = {
     decay: 0.14,
     tailDecay: 0.46,
     mechanical: 0.6,
-    reverb: 0.62,
   },
 };

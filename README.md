@@ -335,30 +335,52 @@ empty it stays empty until you buy a restock. The shooting range passes
 ### The special weapon
 
 `ONE ARMED BANDIT` hangs on the vault wall for $4000 — the last room, behind
-every other purchase, and the most expensive thing in the mansion.
+every other purchase, and the most expensive thing in the mansion. It is meant
+to be absurd, and it is built to be impossible to ignore.
 
-It fires no bullets at all. Every pull spins five reels and the reels decide
-what happens. `special/SlotMachine.ts` owns the rules: every X does nothing,
-every GRENADE throws one grenade with the throws fanned twenty degrees apart
+It fires no bullets. Every pull throws the lever and starts **five real reel
+drums** turning behind glass on the cabinet roof. They stop left to right on a
+stagger, each one landing on the symbol the rules actually rolled — the
+`SlotMachineAnimator` picks each detent at the moment that reel stops, against
+the angle it has really reached, so a reel only ever turns forwards and never
+jerks backwards onto its mark.
+
+Nothing pays out until the last reel bites. That is the whole point of watching
+a slot machine, and it is why the payout is deferred rather than resolved on
+the trigger pull.
+
+The cabinet is covered in things that react:
+
+- **A marquee of fourteen bulbs** ringing the back panel — the face the player
+  actually looks at. Each has its own material, so the chase is a run of light
+  going round rather than one lamp blinking. Amber and slow at idle, faster
+  while the reels turn, and a full rainbow cycle on a win.
+- **A beacon** on the roof that turns faster the more is happening, from a lazy
+  idle to a hard spin on a jackpot.
+- **A payout lamp** in the middle of the marquee that hard strobes on a
+  jackpot.
+- **Neon strips** down both flanks and a glowing payout horn.
+- **Coins** (`special/CoinBurst.ts`) sprayed out of the tray on any win, pooled
+  and instanced, bouncing off the floor. Pure spectacle — they hit nothing —
+  which is exactly why they are there.
+
+`special/SlotMachine.ts` still owns the rules: every X does nothing, every
+GRENADE throws one grenade with the throws fanned twenty degrees apart
 clockwise, a lone NUCLEAR does nothing, and five NUCLEAR is the jackpot. Thirty
-uses, no reserve — when it is dry it is dry until you buy it again.
+uses, no reserve.
 
-The result is not HUD text. It is projected into the world as laser strokes
-(`special/LaserReadout.ts`) on whatever the weapon is pointing at: five symbol
-glyphs across the top, and a bar of twenty ticks underneath showing how close
-the guaranteed jackpot is. A spin that is not a jackpot raises pity; at twenty
-the next spin cannot lose, and any jackpot resets it.
+The result is projected into the world as laser strokes
+(`special/LaserReadout.ts`), never as HUD text: five symbol glyphs and a bar of
+twenty pity ticks, thrown onto whatever the weapon is pointing at. A jackpot
+readout throbs, swells and hangs around twice as long.
 
-Grenades (`special/GrenadeSwarm.ts`) are pooled, drawn as one instanced mesh
-and integrated by hand — a point with a velocity, a gravity term and one floor
-bounce, which is all a 1.5 second flight needs. They do 320 damage falling off
-to nothing at 5.5 m.
+Grenades (`special/GrenadeSwarm.ts`) are pooled and integrated by hand — a
+point with a velocity, a gravity term and one floor bounce. The jackpot
+(`special/NukeSequence.ts`) pulls the camera straight up, drops a bomb on the
+mansion, and kills everything belonging to the **current round** only.
 
-The jackpot (`special/NukeSequence.ts`) pulls the camera straight up, drops a
-bomb on the mansion, and kills everything belonging to the **current round**
-only, paying 400 points. It runs as an explicit phase machine that owns the
-camera outright while it plays, so there is never a frame where two things are
-both trying to place it.
+Every one of these has its own sound, and they are the only tonal sounds in the
+game — see below.
 
 ### Rounds and economy
 
@@ -477,12 +499,28 @@ from `createWeaponModel`, resolving the anchors from named nodes in the file (or
 adding empties where the artist did not). If you add third-party assets, keep them
 under a clearly compatible licence and document their provenance here.
 
-### Replacing the placeholder audio
+### Audio
 
-`AudioSystem` synthesises every sound (a filtered noise crack, a low body thump and a
-tail) so the project has no audio dependencies. It already prefers real samples when
-they exist: call `audio.loadSample('shot:m4a1', url)` — or any `SoundId` — and that
-buffer is played instead of the synth. No other code changes.
+Everything is synthesised at runtime through the Web Audio API; there are no
+audio assets. A shot is four layers — a transient snap, a filtered crack unique
+to the weapon, a doubled low body, and the mechanical clack of the action — all
+soft clipped together for weight.
+
+**There is deliberately no reverb.** An earlier version fed every shot into a
+convolution tail meant to stand in for range walls and mansion corridors. With
+no early energy to anchor it that tail was most of what you heard, and the guns
+came out airy and distant — closer to arrows in flight than to rifles. The tail
+is gone, capped hard where it remains, and the size now comes from doubling the
+low body underneath the shot instead.
+
+The slot machine is the exception and the contrast: it is the only thing in the
+game that plays **notes**. Fat detuned square and sawtooth runs — a lever
+ratchet, a rising click per reel as they land, a major arpeggio on a win, and a
+two octave run with a siren over it on a jackpot. Nothing else is tonal, so the
+moment the cabinet does anything it is unmistakable.
+
+Any sound can still be replaced by a real sample through `loadSample`, which
+takes priority over the synthesised fallback.
 
 ## Testing
 

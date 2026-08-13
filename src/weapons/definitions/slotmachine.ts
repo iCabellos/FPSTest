@@ -72,6 +72,5 @@ export const SLOT_MACHINE: WeaponDefinition = {
     decay: 0.26,
     tailDecay: 0.7,
     mechanical: 1,
-    reverb: 0.7,
   },
 };

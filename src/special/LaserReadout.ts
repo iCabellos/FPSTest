@@ -3,7 +3,9 @@ import { PITY_MAX, type SlotSymbol } from './SlotMachine';
 
 /** Vertex budget: five glyphs plus the pity bar, with room to spare. */
 const MAX_VERTICES = 192;
-const LIFETIME = 2.8;
+const LIFETIME = 3.4;
+/** A jackpot readout hangs around far longer and cycles colour. */
+const JACKPOT_LIFETIME = 5.5;
 /** Half height of one symbol glyph, in metres at the projection plane. */
 const GLYPH = 0.085;
 const GLYPH_SPACING = 0.26;
@@ -41,6 +43,9 @@ export class LaserReadout {
   private readonly colours = new Float32Array(MAX_VERTICES * 3);
   private cursor = 0;
   private life = 0;
+  private maxLife = LIFETIME;
+  private jackpot = false;
+  private age = 0;
 
   constructor(private readonly scene: THREE.Scene) {
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
@@ -78,8 +83,11 @@ export class LaserReadout {
     symbols: readonly SlotSymbol[],
     pity: number,
     guaranteed: boolean,
+    jackpot = false,
   ): void {
     this.cursor = 0;
+    this.jackpot = jackpot;
+    this.age = 0;
 
     const start = -((symbols.length - 1) * GLYPH_SPACING) / 2;
     for (let i = 0; i < symbols.length; i++) {
@@ -94,20 +102,34 @@ export class LaserReadout {
     this.lines.position.copy(anchor);
     this.lines.quaternion.copy(facing);
     this.lines.visible = true;
-    this.life = LIFETIME;
+    this.maxLife = jackpot ? JACKPOT_LIFETIME : LIFETIME;
+    this.life = this.maxLife;
   }
 
   update(dt: number): void {
     if (this.life <= 0) return;
     this.life -= dt;
+    this.age += dt;
     if (this.life <= 0) {
       this.lines.visible = false;
       this.material.opacity = 0;
       return;
     }
+
     // Holds bright, then falls away quickly at the end.
-    const remaining = this.life / LIFETIME;
-    this.material.opacity = Math.min(1, remaining * 2.2);
+    const remaining = this.life / this.maxLife;
+    const fade = Math.min(1, remaining * 2.2);
+    if (this.jackpot) {
+      // A jackpot readout throbs and swells rather than sitting there.
+      this.material.opacity = fade * (0.72 + 0.28 * Math.sin(this.age * 24));
+      const swell = 1 + Math.sin(this.age * 9) * 0.09;
+      this.lines.scale.setScalar(swell);
+      this.lines.rotation.z = Math.sin(this.age * 3.5) * 0.06;
+    } else {
+      this.material.opacity = fade;
+      this.lines.scale.setScalar(1);
+      this.lines.rotation.z = 0;
+    }
   }
 
   dispose(): void {

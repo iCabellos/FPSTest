@@ -19,6 +19,9 @@
  *   /inspect.html?fp=m4a1&pull=0.6   ... with the camera drawn back, so the
  *                                    whole weapon is in frame in its real
  *                                    hip pose rather than half off screen
+ *   /inspect.html?fp=slotmachine&spin=1.2   ... 1.2 seconds into a spin of the
+ *                                    special weapon, reels turning and the
+ *                                    marquee chasing
  *
  * Extra flags: `&anchors=0` hides the anchor markers, `&grid=0` hides the
  * reference grid, `&wire=1` draws wireframe.
@@ -26,6 +29,7 @@
 import * as THREE from 'three';
 import { VIEWMODEL_CAMERA } from '../core/constants';
 import { installViewLighting } from '../rendering/ViewLighting';
+import { SlotMachineAnimator } from '../special/SlotMachineAnimator';
 import { ALL_WEAPONS, WEAPONS_BY_ID } from '../weapons/definitions';
 import type { WeaponDefinition, WeaponId } from '../weapons/WeaponDefinition';
 import { ViewModel } from '../weapons/viewmodel/ViewModel';
@@ -332,7 +336,7 @@ function report(cells: readonly Cell[]): void {
  * same hip and aimed poses. This is where floating parts and anything not
  * actually attached to the weapon show up.
  */
-function renderFirstPerson(id: WeaponId, ads: boolean, pull: number): void {
+function renderFirstPerson(id: WeaponId, ads: boolean, pull: number, spin: number): void {
   const width = 900;
   const height = 560;
   renderer.setSize(width, height);
@@ -368,6 +372,15 @@ function renderFirstPerson(id: WeaponId, ads: boolean, pull: number): void {
       lookDeltaY: 0,
       weapon,
     });
+  }
+
+  // Wind the cabinet forward into a spin, so the reels and the light show can
+  // be checked mid flight rather than only at rest.
+  if (spin > 0) {
+    const model = viewModel.currentModel;
+    const animator = new SlotMachineAnimator(model?.extras);
+    animator.spin({ symbols: ['nuclear', 'grenade', 'x', 'nuclear', 'grenade'], jackpot: false });
+    for (let elapsed = 0; elapsed < spin; elapsed += 1 / 120) animator.update(1 / 120);
   }
 
   // A crosshair, so it is obvious whether the sight actually lines up on it.
@@ -411,7 +424,12 @@ const sheet = params.get('sheet') as ViewName | null;
 const view = (params.get('view') as ViewName | null) ?? 'left';
 
 if (fp && WEAPONS_BY_ID[fp]) {
-  renderFirstPerson(fp, params.get('ads') === '1', Number(params.get('pull') ?? 0));
+  renderFirstPerson(
+    fp,
+    params.get('ads') === '1',
+    Number(params.get('pull') ?? 0),
+    Number(params.get('spin') ?? 0),
+  );
 } else if (requested && WEAPONS_BY_ID[requested]) {
   renderSheet(view, [requested], true);
 } else {

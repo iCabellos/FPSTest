@@ -65,6 +65,5 @@ export const UMP45: WeaponDefinition = {
     decay: 0.17,
     tailDecay: 0.42,
     mechanical: 0.8,
-    reverb: 0.5,
   },
 };

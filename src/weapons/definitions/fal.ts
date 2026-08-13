@@ -54,6 +54,5 @@ export const FAL: WeaponDefinition = {
     decay: 0.17,
     tailDecay: 0.56,
     mechanical: 0.58,
-    reverb: 0.7,
   },
 };

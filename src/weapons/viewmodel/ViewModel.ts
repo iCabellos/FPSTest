@@ -202,6 +202,14 @@ export class ViewModel {
     this.root.updateMatrixWorld(true);
   }
 
+  /**
+   * The model currently in hand, so a mode can drive parts the shared
+   * animation knows nothing about — the slot machine's reels and lamps.
+   */
+  get currentModel(): WeaponModel | null {
+    return this.model;
+  }
+
   /** Hides the weapon when the scope overlay takes over. */
   setVisible(visible: boolean): void {
     this.root.visible = visible;

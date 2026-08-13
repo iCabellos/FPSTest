@@ -55,6 +55,5 @@ export const REVOLVER: WeaponDefinition = {
     decay: 0.19,
     tailDecay: 0.58,
     mechanical: 0.5,
-    reverb: 0.74,
   },
 };

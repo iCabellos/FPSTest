@@ -64,6 +64,5 @@ export const R870: WeaponDefinition = {
     decay: 0.22,
     tailDecay: 0.68,
     mechanical: 0.9,
-    reverb: 0.8,
   },
 };

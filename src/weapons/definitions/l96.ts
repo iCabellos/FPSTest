@@ -67,6 +67,5 @@ export const L96: WeaponDefinition = {
     decay: 0.3,
     tailDecay: 1,
     mechanical: 0.6,
-    reverb: 1,
   },
 };

@@ -54,6 +54,5 @@ export const UZI: WeaponDefinition = {
     decay: 0.1,
     tailDecay: 0.3,
     mechanical: 0.82,
-    reverb: 0.42,
   },
 };

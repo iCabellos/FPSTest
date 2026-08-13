@@ -62,6 +62,5 @@ export const M4A1: WeaponDefinition = {
     decay: 0.15,
     tailDecay: 0.4,
     mechanical: 0.5,
-    reverb: 0.55,
   },
 };
