@@ -1,5 +1,5 @@
 import type { Loadout, WeaponChoice } from '../loadout/loadout';
-import { RANGE_PRIMARIES, SIDEARMS } from '../loadout/loadout';
+import { RANGE_PRIMARIES, SIDEARMS, ZOMBIES_STARTERS } from '../loadout/loadout';
 import type { WeaponId } from '../weapons/WeaponDefinition';
 
 export type LoadoutKind = 'range' | 'zombies';
@@ -25,6 +25,8 @@ export class LoadoutScreen {
   private readonly root = element('div', 'loadout loadout--hidden');
   private readonly primaryRow = element('div', 'loadout__row');
   private readonly secondaryRow = element('div', 'loadout__row');
+  /** Which sidearm list this screen is showing; depends on the mode. */
+  private sidearms: readonly WeaponChoice[] = SIDEARMS;
   private readonly primarySection = element('div', 'loadout__section');
   private readonly subtitle = element('div', 'loadout__subtitle', '');
   private readonly cards = new Map<string, HTMLElement>();
@@ -66,7 +68,9 @@ export class LoadoutScreen {
       : 'Carry a primary and a sidearm. Press Q in the match to swap.';
 
     if (!zombies) this.fill(this.primaryRow, RANGE_PRIMARIES, 'primary');
-    this.fill(this.secondaryRow, SIDEARMS, 'secondary');
+    // Zombies opens on a plain pistol; the range can take any sidearm.
+    this.sidearms = zombies ? ZOMBIES_STARTERS : SIDEARMS;
+    this.fill(this.secondaryRow, this.sidearms, 'secondary');
 
     this.root.classList.remove('loadout--hidden');
   }
@@ -104,7 +108,7 @@ export class LoadoutScreen {
     this.selection[slot] = id;
     // Zombies uses the same pistol in both slots: there is only one gun.
     if (this.kind === 'zombies' && slot === 'secondary') this.selection.primary = id;
-    this.refresh(slot, slot === 'primary' ? RANGE_PRIMARIES : SIDEARMS);
+    this.refresh(slot, slot === 'primary' ? RANGE_PRIMARIES : this.sidearms);
   }
 
   private refresh(slot: keyof Loadout, choices: readonly WeaponChoice[]): void {

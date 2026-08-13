@@ -1,14 +1,34 @@
 export type WeaponId =
   | 'm4a1'
   | 'ak47'
+  | 'scar'
+  | 'g36'
+  | 'fal'
   | 'm60'
   | 'l96'
   | 'mp5'
   | 'mp7'
   | 'ump45'
+  | 'uzi'
+  | 'r870'
+  | 'spas12'
   | 'm9'
   | 'm1911'
+  | 'deagle'
+  | 'revolver'
   | 'slotmachine';
+
+/**
+ * How a weapon is refilled.
+ *
+ * - `magazine`: a detachable box, drum or belt comes off and a fresh one goes
+ *   on. One reload, all the rounds at once.
+ * - `shells`: loaded one at a time, so the reload can be broken off part way
+ *   and the weapon fired with whatever went in. Pump and tube fed shotguns.
+ * - `internal`: a fixed cylinder or magazine refilled in place. One reload, but
+ *   nothing detaches, so there is no part for the animation to swap.
+ */
+export type ReloadStyle = 'magazine' | 'shells' | 'internal';
 export type FireMode = 'semi' | 'auto';
 
 export interface RecoilConfig {
@@ -75,6 +95,12 @@ export interface ProjectileConfig {
   maxDistance: number;
   /** Drives target knockback and impact effects. */
   damage: number;
+  /**
+   * Projectiles launched per trigger pull. Shotguns fire a whole pattern, each
+   * pellet sampled independently from the cone, which is what makes a shotgun
+   * a shotgun rather than a slow rifle.
+   */
+  pellets?: number;
 }
 
 export interface ViewModelConfig {
@@ -119,6 +145,8 @@ export interface WeaponDefinition {
   reserveAmmo: number;
   reloadTime: number;
   equipTime: number;
+  /** Defaults to `magazine`. */
+  reloadStyle?: ReloadStyle;
   /** Present on bolt action weapons; blocks firing after each shot. */
   boltCycleTime?: number;
   recoil: RecoilConfig;

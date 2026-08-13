@@ -224,13 +224,21 @@ describe('weapon definitions', () => {
     expect(ALL_WEAPONS.map((weapon) => weapon.id)).toEqual([
       'm4a1',
       'ak47',
+      'scar',
+      'g36',
+      'fal',
       'm60',
       'l96',
       'mp5',
       'mp7',
       'ump45',
+      'uzi',
+      'r870',
+      'spas12',
       'm9',
       'm1911',
+      'deagle',
+      'revolver',
       'slotmachine',
     ]);
   });
@@ -245,7 +253,8 @@ describe('weapon definitions', () => {
       expect(weapon.spread.max).toBeGreaterThan(weapon.spread.base);
       expect(weapon.ads.fov).toBeLessThan(75);
       expect(weapon.ads.sensitivityMultiplier).toBeLessThanOrEqual(1);
-      expect(weapon.magazineSize).toBeGreaterThanOrEqual(7);
+      // Six is the floor: a revolver cylinder, and nothing holds less.
+      expect(weapon.magazineSize).toBeGreaterThanOrEqual(6);
       expect(weapon.reserveAmmo).toBeGreaterThanOrEqual(0);
       // Ballistics only bind weapons that actually launch a round. The special
       // weapon carries a projectile block to satisfy the shared shape and

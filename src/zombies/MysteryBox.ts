@@ -15,11 +15,19 @@ import {
 export const BOX_POOL: readonly WeaponId[] = [
   'm4a1',
   'ak47',
+  'scar',
+  'g36',
+  'fal',
   'm60',
   'l96',
   'mp5',
   'mp7',
   'ump45',
+  'uzi',
+  'r870',
+  'spas12',
+  'deagle',
+  'revolver',
   'm1911',
 ];
 

@@ -9,7 +9,19 @@ import {
 import { NukeSequence } from '../src/special/NukeSequence';
 import { GRENADE_STEP_DEGREES } from '../src/special/SlotMachine';
 import { createSeededRandom } from '../src/utils/Random';
-import { M9 } from '../src/weapons/definitions';
+import {
+  ALL_WEAPONS,
+  DEAGLE,
+  FAL,
+  G36,
+  M9,
+  MP5,
+  R870,
+  REVOLVER,
+  SCAR,
+  SPAS12,
+  UZI,
+} from '../src/weapons/definitions';
 import { Weapon } from '../src/weapons/Weapon';
 import { ZombieManager } from '../src/zombies/ZombieManager';
 
@@ -345,5 +357,103 @@ describe('deterministic runs', () => {
       return landing;
     };
     expect(run()).toBeCloseTo(run(), 10);
+  });
+});
+
+describe('shell fed shotguns', () => {
+  it('loads one shell per pass rather than a whole tube at once', () => {
+    const weapon = new Weapon(R870);
+    emptyMagazine(weapon);
+    expect(weapon.ammo).toBe(0);
+
+    expect(weapon.requestReload()).toBe(true);
+    weapon.update(R870.reloadTime);
+    expect(weapon.ammo).toBe(1);
+    expect(weapon.reserve).toBe(R870.reserveAmmo - 1);
+  });
+
+  it('keeps feeding by itself until the tube is full', () => {
+    const weapon = new Weapon(R870);
+    emptyMagazine(weapon);
+    weapon.requestReload();
+    // Long enough to load every shell, and then some.
+    for (let i = 0; i < R870.magazineSize + 4; i++) weapon.update(R870.reloadTime);
+    expect(weapon.ammo).toBe(R870.magazineSize);
+    expect(weapon.isReloading).toBe(false);
+  });
+
+  it('can be broken off to fire what is already in it', () => {
+    const weapon = new Weapon(R870);
+    emptyMagazine(weapon);
+    weapon.requestReload();
+    // Two shells in, then the trigger comes back.
+    weapon.update(R870.reloadTime);
+    weapon.update(R870.reloadTime);
+    expect(weapon.ammo).toBe(2);
+
+    weapon.setTrigger(true);
+    const result = weapon.update(1 / 60);
+    expect(weapon.isReloading).toBe(false);
+    expect(result.shots).toBe(1);
+    expect(weapon.ammo).toBe(1);
+  });
+
+  it('stops feeding when the reserve runs out mid string', () => {
+    const weapon = new Weapon(SPAS12);
+    runDry(weapon);
+    emptyMagazine(weapon);
+    expect(weapon.reserve).toBe(0);
+    expect(weapon.requestReload()).toBe(false);
+  });
+
+  it('leaves magazine fed weapons on a single pass reload', () => {
+    const weapon = new Weapon(M9);
+    emptyMagazine(weapon);
+    weapon.requestReload();
+    weapon.update(M9.reloadTime);
+    expect(weapon.ammo).toBe(M9.magazineSize);
+    expect(weapon.isReloading).toBe(false);
+    // And it cannot be broken off, because there is nothing to break off.
+    expect(weapon.cancelReload()).toBe(false);
+  });
+});
+
+describe('the new arsenal', () => {
+  it('fires a pattern from the shotguns and a single round from everything else', () => {
+    for (const shotgun of [R870, SPAS12]) {
+      expect(shotgun.projectile.pellets ?? 1, shotgun.id).toBeGreaterThan(1);
+    }
+    for (const weapon of ALL_WEAPONS) {
+      if (weapon.id === 'r870' || weapon.id === 'spas12') continue;
+      expect(weapon.projectile.pellets ?? 1, weapon.id).toBe(1);
+    }
+  });
+
+  it('spreads the shotguns far wider than any rifle', () => {
+    const widestRifle = Math.max(SCAR.spread.base, G36.spread.base, FAL.spread.base);
+    for (const shotgun of [R870, SPAS12]) {
+      expect(shotgun.spread.base, shotgun.id).toBeGreaterThan(widestRifle * 3);
+    }
+  });
+
+  it('makes the hand cannons hit far harder than the service pistols', () => {
+    for (const cannon of [DEAGLE, REVOLVER]) {
+      expect(cannon.projectile.damage, cannon.id).toBeGreaterThan(M9.projectile.damage * 2);
+      expect(cannon.recoil.vertical, cannon.id).toBeGreaterThan(M9.recoil.vertical);
+      expect(cannon.magazineSize, cannon.id).toBeLessThan(M9.magazineSize);
+    }
+  });
+
+  it('puts the battle rifle above the assault rifles on damage and below on control', () => {
+    for (const assault of [SCAR, G36]) {
+      expect(FAL.projectile.damage).toBeGreaterThan(assault.projectile.damage);
+      expect(FAL.recoil.vertical).toBeGreaterThan(assault.recoil.vertical);
+      expect(FAL.magazineSize).toBeLessThan(assault.magazineSize);
+    }
+  });
+
+  it('gives the Uzi the fastest wander and the shortest reach of the SMGs', () => {
+    expect(UZI.spread.base).toBeGreaterThan(MP5.spread.base);
+    expect(UZI.projectile.maxDistance).toBeLessThanOrEqual(MP5.projectile.maxDistance);
   });
 });

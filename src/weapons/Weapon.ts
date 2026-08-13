@@ -1,4 +1,4 @@
-import type { FireMode, WeaponDefinition } from './WeaponDefinition';
+import type { FireMode, ReloadStyle, WeaponDefinition } from './WeaponDefinition';
 
 /** Guard against catch-up bursts after a long frame. */
 const MAX_SHOTS_PER_UPDATE = 4;
@@ -28,6 +28,8 @@ export class Weapon {
   /** A semi-auto pull only produces one shot until the trigger is released. */
   private triggerConsumed = false;
   private burstShots = 0;
+  /** True while a shell by shell reload should keep feeding. */
+  private loadingShells = false;
   private idleTime = BURST_RESET_DELAY;
   /** Reused every update so the hot path allocates nothing. */
   private readonly result: WeaponTickResult = {
@@ -74,6 +76,10 @@ export class Weapon {
 
   get isReloading(): boolean {
     return this.reloadTimer > 0;
+  }
+
+  get reloadStyle(): ReloadStyle {
+    return this.definition.reloadStyle ?? 'magazine';
   }
 
   get isCyclingBolt(): boolean {
@@ -128,6 +134,20 @@ export class Weapon {
     if (this.reserve <= 0) return false;
     this.reloadTimer = this.definition.reloadTime;
     this.boltTimer = 0;
+    // A shell reload keeps going by itself until it is full or interrupted.
+    this.loadingShells = this.reloadStyle === 'shells';
+    return true;
+  }
+
+  /**
+   * Breaks off a shell by shell reload so the weapon can fire what is already
+   * in it. Pulling the trigger mid reload is the whole point of a tube fed
+   * shotgun, so it must not be forced to finish the whole string first.
+   */
+  cancelReload(): boolean {
+    if (!this.isReloading || this.reloadStyle !== 'shells') return false;
+    this.reloadTimer = 0;
+    this.loadingShells = false;
     return true;
   }
 
@@ -149,6 +169,7 @@ export class Weapon {
   onEquip(): void {
     this.equipTimer = this.definition.equipTime;
     this.reloadTimer = 0;
+    this.loadingShells = false;
     this.boltTimer = 0;
     this.cooldown = 0;
     this.burstShots = 0;
@@ -159,6 +180,7 @@ export class Weapon {
   /** Called when the weapon is holstered. */
   onHolster(): void {
     this.reloadTimer = 0;
+    this.loadingShells = false;
     this.boltTimer = 0;
     this.triggerDown = false;
     this.triggerConsumed = false;
@@ -179,13 +201,22 @@ export class Weapon {
       if (this.reloadTimer <= 0) {
         this.reloadTimer = 0;
         // A partial reload is the honest outcome when the reserve is nearly
-        // gone: you get what is left, not a full magazine.
-        const wanted = this.definition.magazineSize - this.ammoInMagazine;
+        // gone: you get what is left, not a full magazine. A shell reload
+        // takes exactly one round per pass and then queues the next.
+        const room = this.definition.magazineSize - this.ammoInMagazine;
+        const wanted = this.reloadStyle === 'shells' ? Math.min(1, room) : room;
         const taken = this.infiniteReserve ? wanted : Math.min(wanted, this.reserveRounds);
         if (!this.infiniteReserve) this.reserveRounds -= taken;
         this.ammoInMagazine += taken;
         this.burstShots = 0;
         result.reloadFinished = true;
+
+        if (this.loadingShells && this.ammoInMagazine < this.definition.magazineSize) {
+          if (this.reserve > 0) this.reloadTimer = this.definition.reloadTime;
+          else this.loadingShells = false;
+        } else {
+          this.loadingShells = false;
+        }
       }
     }
 
@@ -203,6 +234,9 @@ export class Weapon {
     // Overshoot is carried while a burst is running so the average cadence
     // matches the rpm instead of quantising to the frame rate. Outside a burst
     // it is dropped, otherwise the first rounds after a pause would double up.
+    // A trigger pull during a shell reload stops the reload and shoots.
+    if (this.loadingShells && this.wantsToFire() && this.ammoInMagazine > 0) this.cancelReload();
+
     const firing = this.canFire() && this.wantsToFire() && !this.isEmpty;
     if (!firing && this.cooldown < 0) this.cooldown = 0;
 

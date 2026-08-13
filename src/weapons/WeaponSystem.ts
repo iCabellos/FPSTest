@@ -265,7 +265,12 @@ export class WeaponSystem {
     for (let i = 0; i < shots; i++) {
       // Recomputed per round so bloom applies within a single frame too.
       const cone = this.spread.compute(definition.spread, this.adsFactor, moveFraction);
-      if (!this.deps.onShot?.(weapon)) this.deps.shooting.fire(weapon, cone);
+      if (!this.deps.onShot?.(weapon)) {
+        // A shotgun launches its whole pattern on one pull, each pellet
+        // sampled from the cone independently.
+        const pellets = Math.max(1, definition.projectile.pellets ?? 1);
+        for (let pellet = 0; pellet < pellets; pellet++) this.deps.shooting.fire(weapon, cone);
+      }
       this.spread.addShot(definition.spread);
 
       const impulse = this.recoil.fire(definition.recoil, firstIndex + i, adsRecoilScale);

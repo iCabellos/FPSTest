@@ -168,15 +168,38 @@ character. `Weapon` is a shared state machine — ammo, cadence, fire mode, relo
 bolt cycle — with no rendering or input knowledge, which is what makes it testable.
 Nothing is subclassed per weapon; the personality comes from configuration.
 
-| Weapon | Modes      | RPM | Mag | Reload | Character                                               |
-| ------ | ---------- | --- | --- | ------ | ------------------------------------------------------- |
-| M4A1   | auto/semi  | 800 | 30  | 2.3 s  | Fast, controllable, mild climb, quick ADS               |
-| AK-47  | auto/semi  | 600 | 30  | 2.7 s  | Heavy kick, wide horizontal walk, punishing long bursts |
-| M60    | auto       | 550 | 100 | 6.0 s  | Slow to raise, slow to move, bloom grows fast           |
-| L96A1  | semi       | 90  | 10  | 3.4 s  | Bolt action, 6x scope, precise, one shot at a time      |
-| MP5    | auto/semi  | 800 | 30  | 2.6 s  | Flat and controllable, slow arcing 9 mm                 |
-| MP7    | auto/semi  | 950 | 40  | 2.4 s  | Fastest cadence, lightest kick, wanders sideways        |
-| UMP45  | auto/semi  | 600 | 25  | 2.9 s  | Slow thumping .45 that drops hard past 100 m            |
+Eighteen weapons, in six classes.
+
+| Weapon         | Class          | Modes     | RPM | Mag | Character                                          |
+| -------------- | -------------- | --------- | --- | --- | -------------------------------------------------- |
+| M4A1           | Assault rifle  | auto/semi | 800 | 30  | Fast, controllable, mild climb                     |
+| AK-47          | Assault rifle  | auto/semi | 600 | 30  | Heavy kick, wide horizontal walk                   |
+| SCAR-L         | Assault rifle  | auto/semi | 600 | 30  | Firmer push, short straight climb                  |
+| G36C           | Assault rifle  | auto/semi | 750 | 30  | The most forgiving. Fast, flat, light damage       |
+| FN FAL         | Battle rifle   | semi/auto | 650 | 20  | 7.62. Hits twice as hard and fights you for it     |
+| M60            | Machine gun    | auto      | 550 | 100 | Belt fed. Slow to raise, bloom grows fast          |
+| L96A1          | Sniper         | semi      | 90  | 10  | Bolt action, 6x scope, one shot at a time          |
+| MP5            | SMG            | auto/semi | 800 | 30  | Flat and controllable, slow arcing 9 mm            |
+| MP7            | SMG            | auto/semi | 950 | 40  | Fastest cadence, lightest kick, wanders sideways   |
+| UMP45          | SMG            | auto/semi | 600 | 25  | Slow thumping .45 that drops hard past 100 m       |
+| Uzi            | SMG            | auto/semi | 600 | 32  | A hose for corridors, useless past fifty metres    |
+| Remington 870  | Shotgun        | semi      | 300 | 8   | Pump action, 8 pellets, shell by shell reload      |
+| SPAS-12        | Shotgun        | semi      | 240 | 6   | Semi auto, 9 pellets, wider and harder kicking     |
+| M9             | Sidearm        | semi      | 420 | 17  | Even and forgiving, seventeen of them              |
+| M1911          | Sidearm        | semi      | 380 | 7   | Seven of .45. Hits harder, empties fast            |
+| Desert Eagle   | Hand cannon    | semi      | 260 | 7   | .50 AE. Rifle damage, and it bucks for it          |
+| Magnum         | Hand cannon    | semi      | 200 | 6   | Six of .357, refilled a cylinder at a time         |
+| One Armed Bandit | Special      | semi      | 70  | 30  | Fires no bullets. Spins five reels                 |
+
+Three reload styles, declared per weapon and driving both the mechanic and the
+animation. `magazine` swaps a detachable box, drum or belt in one pass.
+`shells` feeds one round at a time and **can be broken off mid string** by
+pulling the trigger, which is the whole point of a tube fed shotgun. `internal`
+refills a fixed cylinder in place, so nothing detaches and nothing is animated
+falling away.
+
+Shotguns declare `projectile.pellets`, and every pellet is sampled from the
+cone independently — a pattern, not a slow rifle round.
 
 Each weapon carries the sight picture it is known for — an A2 carry handle
 aperture, an AK notch on the barrel trunnion, a leaf notch with an eared blade,
@@ -387,13 +410,50 @@ What keeps it there:
 ### Adding a weapon
 
 1. Drop a new file in `src/weapons/definitions/` exporting a `WeaponDefinition`.
-2. Add it to `WEAPON_LOADOUT` in `src/weapons/definitions/index.ts` (slot order maps
-   to the number keys) and to `WEAPONS_BY_ID`.
-3. Add a builder in `src/weapons/viewmodel/WeaponModelFactory.ts` keyed by the new id.
+2. Add it to `ALL_WEAPONS` and `WEAPONS_BY_ID` in
+   `src/weapons/definitions/index.ts`, and to the `WeaponId` union.
+3. Add a model in `src/weapons/viewmodel/models/`, built from the vocabulary in
+   `viewmodel/parts.ts`, and register it in `WeaponModelFactory.ts`.
+4. Put it somewhere it can be obtained: `RANGE_PRIMARIES` or `SIDEARMS` in
+   `loadout/loadout.ts`, a `WALL_BUYS` entry in `map/layout.ts`, or `BOX_POOL`
+   in `zombies/MysteryBox.ts`.
 
 No other file needs to change. Fire mode, bolt action and scope behaviour all follow
 from the definition: give it a `boltCycleTime` and it becomes bolt action, give its
 `ads` a `scope` and it gets the scope overlay.
+
+### The weapon inspector
+
+A development tool, served by `npm run dev` at **`/inspect.html`** and
+deliberately left out of the production build.
+
+The first person view only ever shows one weapon, from one angle, in motion, at
+the edge of the frame. That is the worst possible place to notice that a part is
+floating, mirrored, buried inside the receiver or half a centimetre off the bore
+line. The inspector renders the same models the game uses, from fixed
+orthographic angles, with the bore line, ten centimetre ticks and every anchor
+drawn on top.
+
+```
+/inspect.html?sheet=left        contact sheet of all eighteen, from the left
+/inspect.html?sheet=top         ... top, bottom, right, front, back, iso
+/inspect.html?weapon=fal&view=top   one weapon, large
+/inspect.html?fp=m4a1           first person, through the real ViewModel and
+                                the game's own view lighting
+/inspect.html?fp=m4a1&ads=1     ... aimed, to check the sight lands on centre
+/inspect.html?fp=m4a1&pull=0.3  ... camera drawn back, pose untouched, so the
+                                whole weapon is in frame
+```
+
+Flags: `&anchors=0`, `&grid=0`, `&wire=1`.
+
+It also writes a measurement table to `window.__inspect` and the console —
+length, height, width, muzzle and sight offsets, and **`muzzleGap`**, the
+distance from the muzzle anchor to the front of the model. That last column is
+the one that matters: the flash, smoke and tracer all start at that anchor, so
+if it drifts out in front of the barrel every shot appears to leave from thin
+air. Four weapons were caught doing exactly that — the L96 by 30 cm and the
+three pistols by 5 to 6 cm — and `tests/models.test.ts` now asserts it.
 
 ### Replacing the placeholder models with GLB
 
@@ -464,7 +524,10 @@ and routes cutting through the building by hopping in one window and out another
 - Only the closest impact per segment is resolved — rounds do not penetrate or
   ricochet.
 - No wind, no spin drift, no zeroing adjustment: drop is the only external factor.
-- The weapon models are recognisable placeholders, not art.
+- The weapon models are built from primitives rather than sculpted. They carry
+  real detail — rails with individual slots, curved magazines, vented ribs,
+  fluted barrels, cut ejection ports — but they are still recognisable
+  placeholders, not art.
 - Boarded windows cannot be repaired. A plank that comes off is off for good,
   so a window is a delay rather than a renewable defence.
 - The zombies mode is solo. There is no networking of any kind, and the menu

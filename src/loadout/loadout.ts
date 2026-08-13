@@ -23,15 +23,33 @@ function describe(id: WeaponId, category: string, summary: string): WeaponChoice
 export const RANGE_PRIMARIES: readonly WeaponChoice[] = [
   describe('m4a1', 'Assault rifle', 'Fast, controllable, mild climb.'),
   describe('ak47', 'Assault rifle', 'Heavy hitting, walks off target in long bursts.'),
+  describe('scar', 'Assault rifle', 'Firmer push per shot, but the climb is short and straight.'),
+  describe('g36', 'Assault rifle', 'The most forgiving here. Fast, flat, and light on damage.'),
+  describe('fal', 'Battle rifle', '7.62 that hits twice as hard. Twenty rounds, and it fights you.'),
   describe('m60', 'Machine gun', 'Belt fed. Slow to handle, sprays under sustained fire.'),
   describe('l96', 'Sniper', 'Bolt action with a 6x scope. One precise shot at a time.'),
   describe('mp5', 'Submachine gun', 'Flat and controllable, slow arcing 9 mm.'),
   describe('mp7', 'Submachine gun', 'Fastest cadence, lightest kick, wanders sideways.'),
   describe('ump45', 'Submachine gun', 'Slow thumping .45 that drops hard past 100 m.'),
+  describe('uzi', 'Submachine gun', 'A hose for corridors. Loses interest past fifty metres.'),
+  describe('r870', 'Shotgun', 'Eight shells of buck, pumped between every shot.'),
+  describe('spas12', 'Shotgun', 'Semi auto buckshot. Faster, wider, and holds fewer.'),
 ];
 
-/** Sidearms. Both modes draw their secondary from here. */
+/** Sidearms the range offers as a secondary. */
 export const SIDEARMS: readonly WeaponChoice[] = [
+  describe('m9', 'Sidearm', '17 rounds. Lighter hits, but you can keep firing.'),
+  describe('m1911', 'Sidearm', '7 rounds of .45. Hits harder, empties fast.'),
+  describe('deagle', 'Hand cannon', '.50 AE. Rifle damage out of a pistol that bucks for it.'),
+  describe('revolver', 'Hand cannon', 'Six of .357, refilled a cylinder at a time.'),
+];
+
+/**
+ * What zombies lets you open with. Deliberately only the two plain pistols:
+ * the rest of the arsenal is earned inside the mansion, so starting with a
+ * hand cannon would undercut every wall buy in the building.
+ */
+export const ZOMBIES_STARTERS: readonly WeaponChoice[] = [
   describe('m9', 'Sidearm', '17 rounds. Lighter hits, but you can keep firing.'),
   describe('m1911', 'Sidearm', '7 rounds of .45. Hits harder, empties fast.'),
 ];
